@@ -4,7 +4,7 @@ const {chromium}=require('playwright-core');
  try{
   const page=await browser.newPage({viewport:{width:1440,height:900}});
   const errors=[];page.on('pageerror',error=>errors.push(error.message));page.on('console',message=>{if(message.type()==='error')errors.push(message.text());});
-  await page.goto('https://momcozy-app.github.io/autumn-forest/',{waitUntil:'networkidle',timeout:120000});
+  await page.goto('https://hawzz.github.io/autumn-forest/',{waitUntil:'networkidle',timeout:120000});
   await page.waitForFunction(()=>window.__forest,{timeout:120000});await page.waitForTimeout(1500);
   const result=await page.evaluate(()=>({title:document.title,frames:__forest.renderer.frameCounter,glError:__forest.renderer.gl.getError(),trees:__forest.world.trees.map(trees=>trees.length),page:location.href}));
   if(errors.length||result.glError||result.frames<2)throw new Error(JSON.stringify({errors,result}));

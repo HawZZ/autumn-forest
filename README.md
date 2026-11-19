@@ -4,7 +4,7 @@
 
 ![层林尽染 · 实时秋林](preview.png)
 
-**在线漫游：[https://momcozy-app.github.io/autumn-forest/](https://momcozy-app.github.io/autumn-forest/)**
+**在线漫游：[https://hawzz.github.io/autumn-forest/](https://hawzz.github.io/autumn-forest/)**
 
 ## 打开方式
 
