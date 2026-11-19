@@ -1,0 +1,61 @@
+{
+  "errors": [],
+  "helpOpen": true,
+  "settings": {
+    "quality": "balanced",
+    "volume": false,
+    "reflections": false,
+    "wind": 0.9099999999999999
+  },
+  "audio": "true",
+  "physics": {
+    "tree": {
+      "position": [
+        24.515334454317333,
+        0.727815825027244,
+        12
+      ],
+      "center": [
+        -6.8,
+        -0.8897590440981453,
+        18
+      ],
+      "distance": 6.055659066853084,
+      "closest": 0.7585382465110231
+    },
+    "jump": {
+      "height": 2.548501250305798,
+      "grounded": true
+    },
+    "water": {
+      "ripple": [
+        24.515335083007812,
+        12,
+        10,
+        1
+      ],
+      "events": 13
+    }
+  },
+  "touch": {
+    "before": {
+      "yaw": -0.035,
+      "position": [
+        2.1159780864587128,
+        2.7402793405172408,
+        34
+      ]
+    },
+    "after": {
+      "yaw": -0.23500000000000001,
+      "position": [
+        2.599599262570166,
+        2.642582906348051,
+        31.980061419907088
+      ]
+    }
+  },
+  "fileReady": true,
+  "gl": 0,
+  "passed": true
+}

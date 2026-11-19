@@ -1,0 +1,393 @@
+/* Native WebGL2 renderer: instanced HDR geometry -> shadows -> water -> air -> film. */
+'use strict';
+(function(F){
+  const {V,perspective,lookAt,ortho,multiply,inverse,projectPoint,clamp,lerp}=F.math;
+  const IDENTITY=[0,0,0,1,1,1,0,1,1,1,0];
+  class Renderer{
+    constructor(canvas,world){
+      this.canvas=canvas;this.world=world;
+      const gl=this.gl=canvas.getContext('webgl2',{alpha:false,antialias:false,depth:true,stencil:false,powerPreference:'high-performance',preserveDrawingBuffer:false});
+      if(!gl)throw new Error('WEBGL2_UNAVAILABLE');
+      this.floatColor=!!gl.getExtension('EXT_color_buffer_float');
+      this.aniso=gl.getExtension('EXT_texture_filter_anisotropic');
+      this.programs={};this.batches=[];this.textures={};this.targets={};
+      this.width=0;this.height=0;this.renderScale=1;this.quality='auto';this.autoScale=.88;
+      this.time=0;this.wind=.62;this.volume=true;this.reflections=true;
+      this.triangles=0;this.drawCalls=0;this.frameTimes=[];this.lastFPS=60;this.frameCounter=0;
+      this.shadowMatrices=[];this.lastShadowTime=-10;this.shadowCenter=[1e5,0,1e5];
+      this.shadowTick=0;this.visibleBatches=[];this.farBatches=[];
+      this.sun=V.normalize([.48,.44,-.76]);
+      this.init();
+    }
+    shader(type,source,label){
+      const gl=this.gl,s=gl.createShader(type);gl.shaderSource(s,source);gl.compileShader(s);
+      if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){
+        const message=label+'\n'+gl.getShaderInfoLog(s);gl.deleteShader(s);throw new Error(message);
+      }return s;
+    }
+    program(name,vs,fs){
+      const gl=this.gl,p=gl.createProgram();
+      const v=this.shader(gl.VERTEX_SHADER,vs,name+' vertex'),f=this.shader(gl.FRAGMENT_SHADER,fs,name+' fragment');
+      gl.attachShader(p,v);gl.attachShader(p,f);gl.linkProgram(p);gl.deleteShader(v);gl.deleteShader(f);
+      if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error(name+' link: '+gl.getProgramInfoLog(p));
+      const uniforms={},types={};const count=gl.getProgramParameter(p,gl.ACTIVE_UNIFORMS);
+      for(let i=0;i<count;i++){const info=gl.getActiveUniform(p,i);const key=info.name.replace(/\[0\]$/,'');uniforms[key]=gl.getUniformLocation(p,info.name);types[key]=info.type;}
+      this.programs[name]={p,u:uniforms,types};return p;
+    }
+    use(p){this.gl.useProgram(p.p);this.currentProgram=p;}
+    init(){
+      const gl=this.gl,S=F.shaders;
+      this.program('scene',S.sceneVS,S.sceneFS);this.program('depth',S.depthVS,S.depthFS);
+      this.program('sky',S.skyVS,S.skyFS);this.program('volume',S.fullVS,S.volumeFS);
+      this.program('water',S.fullVS,S.waterFS);this.program('waterMask',S.waterMaskVS,S.waterMaskFS);this.program('composite',S.fullVS,S.compositeFS);
+      this.program('bright',S.fullVS,S.brightFS);this.program('bloom',S.fullVS,S.bloomFS);this.program('final',S.fullVS,S.finalFS);
+      this.program('particle',S.particleVS,S.particleFS);this.program('mote',S.moteVS,S.moteFS);this.program('stepParticle',S.stepVS,S.stepFS);
+      for(const [name,canvas]of Object.entries(F.createTextures()))this.textures[name]=this.textureFromCanvas(canvas);
+      this.shadowNear=this.createDepthTarget(2048);this.shadowFar=this.createDepthTarget(2048);
+      this.fullVAO=gl.createVertexArray();
+      gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.disable(gl.CULL_FACE);
+      gl.clearColor(.3,.35,.25,1);
+      this.buildScene();
+      this.buildParticles();
+    }
+    textureFromCanvas(canvas){
+      const gl=this.gl,t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
+      gl.texImage2D(gl.TEXTURE_2D,0,gl.SRGB8_ALPHA8,gl.RGBA,gl.UNSIGNED_BYTE,canvas);
+      gl.generateMipmap(gl.TEXTURE_2D);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.REPEAT);
+      if(this.aniso)gl.texParameterf(gl.TEXTURE_2D,this.aniso.TEXTURE_MAX_ANISOTROPY_EXT,Math.min(8,gl.getParameter(this.aniso.MAX_TEXTURE_MAX_ANISOTROPY_EXT)));
+      return t;
+    }
+    createTarget(w,h,depth=false,float=true){
+      const gl=this.gl,fbo=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,fbo);
+      const color=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,color);
+      const internal=float&&this.floatColor?gl.RGBA16F:gl.RGBA8,type=float&&this.floatColor?gl.HALF_FLOAT:gl.UNSIGNED_BYTE;
+      gl.texImage2D(gl.TEXTURE_2D,0,internal,w,h,0,gl.RGBA,type,null);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,color,0);
+      let depthTexture=null;
+      if(depth){depthTexture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,depthTexture);
+        gl.texImage2D(gl.TEXTURE_2D,0,gl.DEPTH_COMPONENT24,w,h,0,gl.DEPTH_COMPONENT,gl.UNSIGNED_INT,null);
+        gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_COMPARE_MODE,gl.NONE);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.DEPTH_ATTACHMENT,gl.TEXTURE_2D,depthTexture,0);
+      }
+      if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE)throw new Error('FRAMEBUFFER_INCOMPLETE');
+      return{fbo,color,depth:depthTexture,w,h};
+    }
+    createDepthTarget(size){
+      const gl=this.gl,fbo=gl.createFramebuffer(),texture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,texture);
+      gl.texImage2D(gl.TEXTURE_2D,0,gl.DEPTH_COMPONENT24,size,size,0,gl.DEPTH_COMPONENT,gl.UNSIGNED_INT,null);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_COMPARE_MODE,gl.COMPARE_REF_TO_TEXTURE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_COMPARE_FUNC,gl.LEQUAL);
+      gl.bindFramebuffer(gl.FRAMEBUFFER,fbo);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.DEPTH_ATTACHMENT,gl.TEXTURE_2D,texture,0);
+      gl.drawBuffers([gl.NONE]);gl.readBuffer(gl.NONE);
+      if(gl.checkFramebufferStatus(gl.FRAMEBUFFER)!==gl.FRAMEBUFFER_COMPLETE)throw new Error('SHADOW_FRAMEBUFFER_INCOMPLETE');
+      return{fbo,depth:texture,w:size,h:size};
+    }
+    geometry(mesh){
+      const gl=this.gl,vbo=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,vbo);gl.bufferData(gl.ARRAY_BUFFER,mesh.vertices,gl.STATIC_DRAW);
+      const ibo=gl.createBuffer();gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ibo);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,mesh.indices,gl.STATIC_DRAW);
+      return{vbo,ibo,count:mesh.indices.length,triangles:mesh.triangles};
+    }
+    bindGeometry(g){
+      const gl=this.gl;gl.bindBuffer(gl.ARRAY_BUFFER,g.vbo);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,g.ibo);
+      for(let i=0;i<6;i++)gl.enableVertexAttribArray(i);
+      const stride=52;gl.vertexAttribPointer(0,3,gl.FLOAT,false,stride,0);gl.vertexAttribPointer(1,3,gl.FLOAT,false,stride,12);
+      gl.vertexAttribPointer(2,2,gl.FLOAT,false,stride,24);gl.vertexAttribPointer(3,3,gl.FLOAT,false,stride,32);
+      gl.vertexAttribPointer(4,1,gl.FLOAT,false,stride,44);gl.vertexAttribPointer(5,1,gl.FLOAT,false,stride,48);
+      gl.vertexAttribDivisor(0,0);gl.vertexAttribDivisor(1,0);gl.vertexAttribDivisor(2,0);gl.vertexAttribDivisor(3,0);gl.vertexAttribDivisor(4,0);gl.vertexAttribDivisor(5,0);
+    }
+    instanceBuffer(list){
+      const gl=this.gl,buffer=gl.createBuffer(),data=new Float32Array(list.length*11);
+      for(let i=0;i<list.length;i++){
+        const a=list[i],o=i*11;data[o]=a.position[0];data[o+1]=a.position[1];data[o+2]=a.position[2];
+        data[o+3]=a.scale[0];data[o+4]=a.scale[1];data[o+5]=a.scale[2];data[o+6]=a.rotation;
+        data[o+7]=a.color[0];data[o+8]=a.color[1];data[o+9]=a.color[2];data[o+10]=a.phase;
+      }gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,data,gl.STATIC_DRAW);
+      return{buffer,data,count:list.length};
+    }
+    bindInstances(buffer){
+      const gl=this.gl;gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
+      for(let i=6;i<=8;i++)gl.enableVertexAttribArray(i);
+      gl.vertexAttribPointer(6,3,gl.FLOAT,false,44,0);gl.vertexAttribPointer(7,4,gl.FLOAT,false,44,12);gl.vertexAttribPointer(8,4,gl.FLOAT,false,44,28);
+      gl.vertexAttribDivisor(6,1);gl.vertexAttribDivisor(7,1);gl.vertexAttribDivisor(8,1);
+    }
+    batch(name,geometry,instances,mode,options={}){
+      if(!geometry||!geometry.indices.length)return null;
+      const gl=this.gl,inst=this.instanceBuffer(instances||[{position:[0,0,0],scale:[1,1,1],rotation:0,phase:0,color:[1,1,1]}]);
+      const gpuGeometry=this.geometry(geometry);
+      const vao=gl.createVertexArray();gl.bindVertexArray(vao);this.bindGeometry(gpuGeometry);this.bindInstances(inst.buffer);
+      const batch={name,vbo:gpuGeometry.vbo,ibo:gpuGeometry.ibo,indexCount:gpuGeometry.count,triangles:gpuGeometry.triangles,instances:inst,mode,vao,visibleCount:inst.count,...options};this.batches.push(batch);return batch;
+    }
+    buildScene(){
+      const w=this.world,G=F.geometry;
+      this.batch('terrain',G.createTerrain(w),null,0,{texture:'soil',shadow:false,frustum:false});
+      this.batch('mountains',G.createMountains(),null,0,{texture:'soil',shadow:false,frustum:false});
+      this.treeBatches=[];
+      for(let t=0;t<3;t++){
+        const high=G.createTree(t,3041+t*971,0),low=G.createTree(t,3041+t*971,1);
+        const wood=this.batch('wood-'+t,high.wood,w.trees[t],1,{texture:'bark',frustum:true,radius:8,centerY:7});
+        const leaves=this.batch('leaves-'+t,high.leaves,w.trees[t],2,{frustum:true,radius:8,centerY:9,lod:1,shadow:true});
+        const lowLeaves=this.batch('far-leaves-'+t,low.leaves,w.trees[t],2,{frustum:true,radius:8,centerY:9,far:true,lod:2});
+        this.treeBatches.push({wood,leaves,lowLeaves});
+      }
+      this.batch('ferns',G.createFern(357),w.ferns,3,{frustum:true,radius:1.4,centerY:.4,maxDistance:66});
+      this.batch('grasses',G.createGrass(855),w.grasses,4,{frustum:true,radius:.6,centerY:.3,maxDistance:42});
+      this.batch('rocks',G.createRock(883),w.rocks,4,{texture:'stone',frustum:true,radius:1,centerY:.2});
+      this.batch('logs',G.createLog(),w.logs,1,{texture:'bark',frustum:true,radius:3,centerY:.4});
+      this.batch('leaf-litter',G.createGroundLeaf(),w.groundLeaves,2,{frustum:true,radius:.4,centerY:.05,maxDistance:65});
+      this.batch('saplings',G.createTree(1,790,1).leaves,w.saplings,2,{frustum:true,radius:1.2,centerY:1,maxDistance:65});
+      this.water=this.batch('water',G.createWater(w),null,5,{texture:'stone',shadow:false,frustum:false});
+    }
+    buildParticles(){
+      const gl=this.gl,geo=this.geometry(F.geometry.createGroundLeaf()),random=F.math.rng(77234),data=new Float32Array(1250*8);
+      for(let i=0;i<1250;i++){
+        data[i*8]=random();data[i*8+1]=random();data[i*8+2]=random();data[i*8+3]=random();
+        const x=data[i*8]*110-55,z=data[i*8+2]*110-55;
+        data[i*8+4]=x;data[i*8+5]=this.world.height(x,z)+.045;data[i*8+6]=z;data[i*8+7]=8+data[i*8+1]*9;
+      }
+      this.particleCount=1250;this.particleTriangles=geo.triangles;this.particleVAO=gl.createVertexArray();gl.bindVertexArray(this.particleVAO);this.bindGeometry(geo);
+      const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,data,gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(6);gl.vertexAttribPointer(6,4,gl.FLOAT,false,32,0);gl.vertexAttribDivisor(6,1);
+      gl.enableVertexAttribArray(7);gl.vertexAttribPointer(7,4,gl.FLOAT,false,32,16);gl.vertexAttribDivisor(7,1);
+      this.moteVAO=gl.createVertexArray();gl.bindVertexArray(this.moteVAO);
+      const motes=new Float32Array(850*3);for(let i=0;i<motes.length;i++)motes[i]=random();
+      const mb=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,mb);gl.bufferData(gl.ARRAY_BUFFER,motes,gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,3,gl.FLOAT,false,12,0);gl.vertexAttribDivisor(0,0);
+      this.moteCount=850;gl.bindVertexArray(null);
+      this.stepParticleBuffer=gl.createBuffer();this.stepParticleVAO=gl.createVertexArray();gl.bindVertexArray(this.stepParticleVAO);
+      gl.bindBuffer(gl.ARRAY_BUFFER,this.stepParticleBuffer);gl.bufferData(gl.ARRAY_BUFFER,72*20,gl.DYNAMIC_DRAW);
+      gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,3,gl.FLOAT,false,20,0);gl.vertexAttribDivisor(0,0);
+      gl.enableVertexAttribArray(1);gl.vertexAttribPointer(1,2,gl.FLOAT,false,20,12);gl.vertexAttribDivisor(1,0);
+      this.stepParticles=[];this.lastStepEvent=0;
+    }
+    resize(){
+      const dpr=Math.min(window.devicePixelRatio||1,1.6),w=Math.floor(innerWidth*dpr),h=Math.floor(innerHeight*dpr);
+      this.canvas.width=w;this.canvas.height=h;
+      this.width=Math.max(320,Math.floor(w*this.renderScale));this.height=Math.max(180,Math.floor(h*this.renderScale));
+      for(const key of ['scene','water','waterMask','volume','composite','bloomA','bloomB','waterDepthTarget'])if(this.targets[key]){
+        const t=this.targets[key];this.gl.deleteFramebuffer(t.fbo);this.gl.deleteTexture(t.color);if(t.depth)this.gl.deleteTexture(t.depth);
+      }
+      const w0=this.width,h0=this.height;
+      this.targets.scene=this.createTarget(w0,h0,true);
+      if(this.waterDepthTarget){this.gl.deleteFramebuffer(this.waterDepthTarget.fbo);this.gl.deleteTexture(this.waterDepthTarget.depth);this.waterDepthTarget=null;}
+      this.targets.water=this.createTarget(w0,h0,false);
+      this.targets.waterMask=this.createTarget(w0,h0,false);
+      this.gl.bindFramebuffer(this.gl.FRAMEBUFFER,this.targets.waterMask.fbo);
+      this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER,this.gl.DEPTH_ATTACHMENT,this.gl.TEXTURE_2D,this.targets.scene.depth,0);
+      if(this.gl.checkFramebufferStatus(this.gl.FRAMEBUFFER)!==this.gl.FRAMEBUFFER_COMPLETE)throw new Error('WATER_MASK_FRAMEBUFFER_INCOMPLETE');
+      this.targets.volume=this.createTarget(Math.ceil(w0/2),Math.ceil(h0/2));
+      this.targets.composite=this.createTarget(w0,h0,false);
+      this.targets.bloomA=this.createTarget(Math.ceil(w0/4),Math.ceil(h0/4));
+      this.targets.bloomB=this.createTarget(Math.ceil(w0/4),Math.ceil(h0/4));
+      this.gl.bindFramebuffer(this.gl.FRAMEBUFFER,null);
+    }
+    setQuality(value){
+      this.quality=value;
+      const scales={high:1,balanced:.83,low:.65,auto:this.autoScale};
+      this.renderScale=scales[value]||.83;this.resize();
+    }
+    texture(unit,texture,program,name){
+      const gl=this.gl;gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.TEXTURE_2D,texture);
+      if(this.currentProgram!==program)this.use(program);
+      if(program.u[name]!==undefined)gl.uniform1i(program.u[name],unit);
+    }
+    uniforms(p,values){
+      const gl=this.gl;
+      for(const [name,value]of Object.entries(values)){
+        const loc=p.u[name];if(loc===undefined||loc===null)continue;
+        if(typeof value==='number'){
+          if(p.types[name]===gl.INT||p.types[name]===gl.BOOL||p.types[name]===gl.SAMPLER_2D||p.types[name]===gl.SAMPLER_2D_SHADOW)gl.uniform1i(loc,value);else gl.uniform1f(loc,value);
+        }
+        else if(value.length===16)gl.uniformMatrix4fv(loc,false,value);
+        else if(value.length===2)gl.uniform2fv(loc,value);
+        else if(value.length===3)gl.uniform3fv(loc,value);
+        else if(value.length===4)gl.uniform4fv(loc,value);
+      }
+    }
+    pass(name,target){const gl=this.gl,p=this.programs[name];gl.useProgram(p.p);this.currentProgram=p;gl.bindFramebuffer(gl.FRAMEBUFFER,target?target.fbo:null);gl.viewport(0,0,target?target.w:this.canvas.width,target?target.h:this.canvas.height);
+      for(let i=0;i<8;i++){gl.activeTexture(gl.TEXTURE0+i);gl.bindTexture(gl.TEXTURE_2D,null);}
+      return p;}
+    setShadowUniforms(p){
+      this.uniforms(p,{uShadowVP0:this.shadowMatrices[0],uShadowVP1:this.shadowMatrices[1]});
+      this.texture(3,this.shadowNear.depth,p,'uShadowNear');this.texture(4,this.shadowFar.depth,p,'uShadowFar');
+    }
+    showTexture(target){
+      if(!this.debugTexture){
+        this.program('debug',F.shaders.fullVS,F.shaders.maskFS);this.debugTexture=this.programs.debug;
+      }
+      const p=this.pass('debug',null);this.texture(0,target.color,p,'uMask');this.gl.bindVertexArray(this.fullVAO);this.gl.drawArrays(this.gl.TRIANGLES,0,3);
+    }
+    filterInstances(batch,shadowPass=false,shadowRange=75){
+      if(!batch)return 0;
+      const data=batch.instances.data,out=batch.filterData||(batch.filterData=new Float32Array(data.length));
+      let count=0;
+      const maxDistance=batch.far?175:batch.lod===1?48:batch.lod===2?42:batch.maxDistance||100;
+      const camera=this.cameraPos;
+      for(let i=0;i<batch.instances.count;i++){
+        const o=i*11,dx=data[o]-camera[0],dz=data[o+2]-camera[2],dist=Math.hypot(dx,dz);
+        if(dist>maxDistance)continue;
+        if(shadowPass&&dist>shadowRange)continue;
+        if(batch.frustum&&this.frustum){
+          const x=data[o],y=data[o+1]+(batch.centerY||2),z=data[o+2],r=batch.radius||2;
+          const f=this.frustum;let visible=true;
+          for(let k=0;k<4;k++){if(f[k][0]*x+f[k][1]*y+f[k][2]*z+f[k][3]<-r){visible=false;break;}}
+          if(!visible)continue;
+        }
+        if(count!==i)out.set(data.subarray(o,o+11),count*11);count++;
+      }
+      if(!count)return 0;
+      if(!batch.filterBuffer){
+        const gl=this.gl;batch.filterBuffer=gl.createBuffer();batch.staticVAO=gl.createVertexArray();gl.bindVertexArray(batch.staticVAO);
+        this.bindGeometry(batch);gl.bindBuffer(gl.ARRAY_BUFFER,batch.filterBuffer);gl.bufferData(gl.ARRAY_BUFFER,data.byteLength,gl.DYNAMIC_DRAW);this.bindInstances(batch.filterBuffer);
+      }
+      const gl=this.gl;gl.bindBuffer(gl.ARRAY_BUFFER,batch.filterBuffer);gl.bufferSubData(gl.ARRAY_BUFFER,0,out.subarray(0,count*11));return count;
+    }
+    drawBatch(batch,count=-1,overrideVAO=null){
+      const gl=this.gl;if(!batch)return;
+      const n=count<0?batch.instances.count:count;if(!n)return;
+      if(!batch.staticVAO){
+        const gl=this.gl;batch.staticVAO=gl.createVertexArray();gl.bindVertexArray(batch.staticVAO);this.bindGeometry(batch);
+        if(batch.filterBuffer)this.bindInstances(batch.filterBuffer);else this.bindInstances(batch.instances.buffer);
+      }
+      gl.bindVertexArray(batch.staticVAO);gl.drawElementsInstanced(gl.TRIANGLES,batch.indexCount,gl.UNSIGNED_INT,0,n);
+      this.triangles+=batch.triangles*n;this.drawCalls++;
+    }
+    shadowMap(camera,forward){
+      const gl=this.gl,p=this.programs.depth;this.use(p);
+      gl.enable(gl.DEPTH_TEST);gl.depthMask(true);gl.clearDepth(1);gl.disable(gl.BLEND);
+      for(let index=0;index<2;index++){
+        const range=index===0?32:90,span=index===0?27:72;
+        const source=index===0?this.visibleBatches:this.farBatches;
+        const center=[camera[0]+forward[0]*(index===0?13:43),0,camera[2]+forward[2]*(index===0?13:43)];
+        center[0]=Math.round(center[0]*2)/2;center[2]=Math.round(center[2]*2)/2;
+        const target=this.sun,eye=[center[0]+this.sun[0]*95,center[1]+this.sun[1]*95,center[2]+this.sun[2]*95];
+        const light=multiply(ortho(-span,span,-span,span,.5,210),lookAt(eye,center,[0,1,0]));
+        this.shadowMatrices[index]=light;
+        gl.bindFramebuffer(gl.FRAMEBUFFER,index===0?this.shadowNear.fbo:this.shadowFar.fbo);gl.viewport(0,0,2048,2048);gl.clear(gl.DEPTH_BUFFER_BIT);
+        this.uniforms(p,{uLightVP:light,uTime:this.time,uWind:this.wind});
+        for(const batch of source){
+          if(batch.shadow===false)continue;
+          this.uniforms(p,{uMode:batch.mode});this.drawBatch(batch,batch.visibleCount);
+        }
+      }
+    }
+    render(camera,forward,dt){
+      if(!this.width||this.canvas.width!==Math.floor(innerWidth*Math.min(devicePixelRatio||1,1.6))||this.canvas.height!==Math.floor(innerHeight*Math.min(devicePixelRatio||1,1.6)))this.resize();
+      const gl=this.gl;this.cameraPos=camera;this.drawCalls=0;this.triangles=0;
+      const aspect=this.width/this.height,projection=perspective(67*Math.PI/180,aspect,.09,310);
+      const view=lookAt(camera,[camera[0]+forward[0],camera[1]+forward[1],camera[2]+forward[2]],[0,1,0]);
+      const vp=multiply(projection,view),invVP=inverse(vp);this.vp=vp;this.invVP=invVP;
+      this.frustum=[];
+      for(const m of [[vp[3]+vp[0],vp[7]+vp[4],vp[11]+vp[8],vp[15]+vp[12]],[vp[3]-vp[0],vp[7]-vp[4],vp[11]-vp[8],vp[15]-vp[12]],[vp[3]+vp[1],vp[7]+vp[5],vp[11]+vp[9],vp[15]+vp[13]],[vp[3]-vp[1],vp[7]-vp[5],vp[11]-vp[9],vp[15]-vp[13]]]){
+        const len=Math.hypot(m[0],m[1],m[2]);this.frustum.push(m.map(v=>v/len));
+      }
+      this.visibleBatches.length=0;this.farBatches.length=0;
+      for(const batch of this.batches){
+        const count=batch.frustum?this.filterInstances(batch):batch.instances.count;
+        batch.visibleCount=count;if(!count)continue;
+        if(batch.far)this.farBatches.push(batch);else this.visibleBatches.push(batch);
+      }
+      if(this.time-this.lastShadowTime>.30||Math.hypot(camera[0]-this.shadowCenter[0],camera[2]-this.shadowCenter[2])>4){
+        this.shadowMap(camera,forward);this.lastShadowTime=this.time;this.shadowCenter=[camera[0],0,camera[2]];
+      }
+      let p=this.pass('scene',this.targets.scene);gl.depthMask(true);gl.clearDepth(1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.disable(gl.BLEND);
+      this.uniforms(p,{uViewProjection:vp,uCamera:camera,uSunDirection:this.sun,uTime:this.time,uWind:this.wind,uFogColor:[.43,.51,.44]});
+      this.setShadowUniforms(p);
+      const z=this.world.viewpoints.path.z;
+      this.uniforms(p,{uPathX:this.world.pathX(camera[2]),uCreekX:this.world.creekX(camera[2]),uCreekLevel:this.world.creekLevel(camera[2])});
+      for(const batch of this.visibleBatches){
+        this.uniforms(p,{uMode:batch.mode});
+        if(batch.texture)this.texture(0,this.textures[batch.texture],p,'uTexture');
+        else this.texture(0,this.textures.soil,p,'uTexture');
+        this.drawBatch(batch,batch.visibleCount);
+      }
+      // Static distant crown meshes are merged into one dynamic instance submission per species.
+      for(const lowLeaves of this.farBatches){
+        this.uniforms(p,{uMode:2});this.drawBatch(lowLeaves,lowLeaves.visibleCount);
+      }
+      // The water surface writes scene depth so volumetric rays terminate on it.
+      // Water is a separate full-screen, masked pass; it never adds geometry to the shadow map.
+      this.drawParticles(p);
+      // The masked water pass needs the opaque scene depth; the real water depth is copied here.
+      if(!this.waterDepthTarget){
+        this.waterDepthTarget=this.createDepthTarget(this.width,this.height);
+        gl.bindTexture(gl.TEXTURE_2D,this.waterDepthTarget.depth);
+        gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_COMPARE_MODE,gl.NONE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+      }
+      gl.bindFramebuffer(gl.FRAMEBUFFER,this.waterDepthTarget.fbo);gl.clearDepth(1);gl.clear(gl.DEPTH_BUFFER_BIT);
+      gl.bindFramebuffer(gl.READ_FRAMEBUFFER,this.targets.scene.fbo);gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER,this.waterDepthTarget.fbo);
+      gl.blitFramebuffer(0,0,this.width,this.height,0,0,this.width,this.height,gl.DEPTH_BUFFER_BIT,gl.NEAREST);
+      gl.enable(gl.DEPTH_TEST);gl.depthMask(true);
+      const waterDepthProgram=this.programs.depth;this.use(waterDepthProgram);
+      this.uniforms(waterDepthProgram,{uLightVP:vp,uTime:this.time,uWind:0,uMode:5});this.drawBatch(this.water,-1);
+      gl.disable(gl.DEPTH_TEST);gl.depthMask(false);gl.disable(gl.CULL_FACE);
+      p=this.pass('sky',this.targets.scene);gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.depthMask(false);this.uniforms(p,{uInverseVP:invVP,uCamera:camera,uSunDirection:this.sun,uTime:this.time});gl.bindVertexArray(this.fullVAO);gl.drawArrays(gl.TRIANGLES,0,3);this.drawCalls++;
+      gl.disable(gl.DEPTH_TEST);
+      p=this.pass('volume',this.targets.volume);this.uniforms(p,{uDepth:0,uInverseVP:invVP,uCamera:camera,uSunDirection:this.sun,uTime:this.time,uSteps:this.quality==='low'?16:this.quality==='high'?36:24,uResolution:[this.targets.volume.w,this.targets.volume.h]});
+      this.texture(0,this.waterDepthTarget.depth,p,'uDepth');this.setShadowUniforms(p);gl.bindVertexArray(this.fullVAO);gl.drawArrays(gl.TRIANGLES,0,3);this.drawCalls++;
+      p=this.pass('waterMask',this.targets.waterMask);gl.clearColor(0,0,0,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.clearColor(.3,.35,.25,1);
+      gl.enable(gl.DEPTH_TEST);gl.depthMask(true);
+      this.uniforms(p,{uViewProjection:vp});this.drawBatch(this.water,-1,this.water?this.water.staticVAO:null);
+      gl.disable(gl.DEPTH_TEST);gl.depthMask(false);
+      p=this.pass('water',this.targets.water);this.uniforms(p,{uInverseVP:invVP,uViewProjection:vp,uCamera:camera,uSunDirection:this.sun,uTime:this.time,uReflections:this.reflections?1:0});
+      this.texture(0,this.targets.scene.color,p,'uColor');this.texture(1,this.targets.scene.depth,p,'uDepth');this.texture(2,this.targets.waterMask.color,p,'uWaterMask');
+      const ripples=window.Forest.player?window.Forest.player.rippleData():new Float32Array(32);
+      if(p.u.uRipples)gl.uniform4fv(p.u.uRipples,ripples);
+      gl.bindVertexArray(this.fullVAO);gl.drawArrays(gl.TRIANGLES,0,3);this.drawCalls++;
+      p=this.pass('composite',this.targets.composite);this.uniforms(p,{uVolumeTexel:[1/this.targets.volume.w,1/this.targets.volume.h],uVolumeEnabled:this.volume?1:0});
+      this.texture(0,this.targets.water.color,p,'uColor');this.texture(1,this.targets.volume.color,p,'uVolume');this.texture(2,this.targets.scene.depth,p,'uDepth');
+      gl.bindVertexArray(this.fullVAO);gl.drawArrays(gl.TRIANGLES,0,3);this.drawCalls++;
+      p=this.pass('bright',this.targets.bloomA);this.texture(0,this.targets.composite.color,p,'uTexture');gl.bindVertexArray(this.fullVAO);gl.drawArrays(gl.TRIANGLES,0,3);
+      p=this.pass('bloom',this.targets.bloomB);this.texture(0,this.targets.bloomA.color,p,'uTexture');this.uniforms(p,{uDirection:[1/this.targets.bloomA.w,0]});gl.drawArrays(gl.TRIANGLES,0,3);
+      p=this.pass('bloom',this.targets.bloomA);this.texture(0,this.targets.bloomB.color,p,'uTexture');this.uniforms(p,{uDirection:[0,1/this.targets.bloomA.h]});gl.drawArrays(gl.TRIANGLES,0,3);
+      p=this.pass('final',null);this.uniforms(p,{uTexel:[1/this.width,1/this.height],uTime:this.time});
+      this.texture(0,this.targets.composite.color,p,'uColor');this.texture(1,this.targets.bloomA.color,p,'uBloom');gl.bindVertexArray(this.fullVAO);gl.drawArrays(gl.TRIANGLES,0,3);this.drawCalls++;
+      gl.depthMask(true);gl.enable(gl.DEPTH_TEST);
+      this.frameCounter++;
+      return{drawCalls:this.drawCalls,triangles:this.triangles};
+    }
+    drawParticles(){
+      const gl=this.gl,p=this.programs.particle;this.use(p);
+      this.uniforms(p,{uViewProjection:this.vp,uTime:this.time,uWind:this.wind,uCamera:this.cameraPos,uSunDirection:this.sun});
+      gl.bindVertexArray(this.particleVAO);gl.drawElementsInstanced(gl.TRIANGLES,this.particleTriangles*3,gl.UNSIGNED_INT,0,this.quality==='low'?450:1250);
+      this.triangles+=21*1250;this.drawCalls++;
+      gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE);gl.depthMask(false);
+      const m=this.programs.mote;this.use(m);this.uniforms(m,{uViewProjection:this.vp,uTime:this.time,uCamera:this.cameraPos,uResolution:[this.width,this.height]});
+      gl.bindVertexArray(this.moteVAO);gl.drawArrays(gl.POINTS,0,this.quality==='low'?250:850);this.drawCalls++;
+      const player=window.Forest.player;
+      if(player&&player.stepEvents!==this.lastStepEvent){
+        this.lastStepEvent=player.stepEvents;
+        for(let i=0;i<6;i++){
+          const a=i*2.4+player.stepEvents,r=.12+(i%3)*.07;
+          const x=player.position[0]+Math.cos(a)*r,z=player.position[2]+Math.sin(a)*r;
+          this.stepParticles.push([x,this.world.height(x,z)+.07,z,this.time,player.inWater?1:0]);
+        }
+        if(this.stepParticles.length>72)this.stepParticles.splice(0,this.stepParticles.length-72);
+      }
+      this.stepParticles=this.stepParticles.filter(p=>this.time-p[3]<1.15);
+      if(this.stepParticles.length){
+        const s=this.programs.stepParticle;this.use(s);this.uniforms(s,{uViewProjection:this.vp,uTime:this.time,uCamera:this.cameraPos,uResolution:[this.width,this.height]});
+        gl.bindVertexArray(this.stepParticleVAO);gl.bindBuffer(gl.ARRAY_BUFFER,this.stepParticleBuffer);gl.bufferSubData(gl.ARRAY_BUFFER,0,new Float32Array(this.stepParticles.flat()));gl.drawArrays(gl.POINTS,0,this.stepParticles.length);this.drawCalls++;
+      }
+      gl.depthMask(true);gl.disable(gl.BLEND);
+    }
+    updatePerformance(dt){
+      this.frameTimes.push(dt);if(this.frameTimes.length>90)this.frameTimes.shift();
+      if(this.frameCounter%90===0&&this.frameTimes.length>30){
+        const avg=this.frameTimes.reduce((a,b)=>a+b,0)/this.frameTimes.length;this.lastFPS=Math.round(1/avg);
+        if(this.quality==='auto'){
+          let next=this.autoScale;
+          if(avg>.028&&this.autoScale>.56)next=Math.max(.56,this.autoScale-.08);
+          else if(avg<.017&&this.autoScale<1)next=Math.min(1,this.autoScale+.04);
+          if(Math.abs(next-this.autoScale)>.01){this.autoScale=next;this.renderScale=next;this.resize();}
+        }
+      }
+    }
+  }
+  F.Renderer=Renderer;
+})(window.Forest);

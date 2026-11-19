@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="theme-color" content="#27251d">
+  <meta name="description" content="层林尽染：纯 WebGL2 秋日森林第一人称漫游。听风，踏叶，走进光里。">
+  <title>层林尽染 · 秋日森林漫游</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='8' fill='%23293224'/%3E%3Cpath d='M20 34V17m0 10L8 16m12 4 11-11M9 16C2 8 14 2 19 11 24 1 38 8 30 18 25 23 19 25 20 27 16 20 12 20 9 16Z' fill='none' stroke='%23e9cf88' stroke-width='1.5'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="forest" aria-label="秋日森林三维场景，点击开始漫游" tabindex="0"></canvas>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="masthead">
+    <a class="wordmark" href="#" id="home-link" aria-label="返回林间小径">
+      <svg viewBox="0 0 36 40" aria-hidden="true"><path d="M18 37V19M18 27 7 16M18 22 29 9M18 16 12 8M7 16C1 10 9 2 13 9c0-9 12-9 13 0 8-5 13 5 6 10-4 4-11 4-14 8-3-4-7-6-11-11Z"/></svg>
+      <span>层林尽染<small>AUTUMN, IN ITS QUIETEST FORM</small></span>
+    </a>
+    <div class="header-actions">
+      <button class="icon-button" id="audio-button" aria-label="开启自然声音" aria-pressed="false" title="自然声音">
+        <svg class="sound-on" viewBox="0 0 24 24"><path d="m11 5-6 4H2v6h3l6 4V5Zm4 3a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/></svg>
+        <svg class="sound-off" viewBox="0 0 24 24"><path d="m11 5-6 4H2v6h3l6 4V5Zm5 4 5 6m0-6-5 6"/></svg>
+      </button>
+      <button class="icon-button" id="help-button" aria-label="查看漫游指南" title="漫游指南">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 5 .5c0 1.5-2.5 2-2.5 3.5m0 3v.2"/></svg>
+      </button>
+      <button class="settings-button" id="settings-button" aria-expanded="false" aria-controls="settings-panel">
+        <svg viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2.5"/><circle cx="15" cy="17" r="2.5"/></svg>
+        <span>画面设置</span>
+      </button>
+    </div>
+  </header>
+
+  <section class="entry-panel" id="entry-panel" aria-label="开始漫游">
+    <div class="season-note"><span></span> 深秋 · 林间有风</div>
+    <h1>层林<br>尽染<span class="title-stop">。</span></h1>
+    <p class="intro">不必赶路。<br>走进光里，听一场秋天。</p>
+    <button class="enter-button" id="enter-button"><span>步入森林</span><svg viewBox="0 0 36 20"><path d="M1 10h31m-8-8 8 8-8 8"/></svg></button>
+    <div class="entry-footnote">戴上耳机，慢行更佳 <span class="tiny-line"></span> 实时生成的世界</div>
+  </section>
+
+  <div class="scene-caption" id="scene-caption" aria-live="polite">
+    <span class="caption-rule"></span>
+    <div><h2 id="location-name">林间小径</h2><p id="location-description">风过林梢，光影随行</p></div>
+  </div>
+
+  <div class="compass" aria-hidden="true"><span>北</span><div class="compass-track"><i></i><i></i><i></i><i></i><i></i><b id="compass-needle"></b><i></i><i></i><i></i><i></i><i></i></div><span id="heading">000°</span></div>
+  <div id="crosshair" aria-hidden="true"></div>
+  <button id="resume-button" class="resume-button" hidden>点击继续漫游 <kbd>↵</kbd></button>
+
+  <nav class="viewpoints" aria-label="选择观景点">
+    <button class="viewpoint active" data-view="path" aria-pressed="true"><svg viewBox="0 0 28 28"><path d="M9 25c7-7-1-7 4-13s0-5 4-10M18 25c7-7-1-7 4-13s0-5 4-10M2 9l4-5 3 4m-5 8 4-6 3 6m9 1 4-7 3 6"/></svg><span>林间小径</span></button>
+    <button class="viewpoint" data-view="creek" aria-pressed="false"><svg viewBox="0 0 28 28"><path d="M2 16c4-4 7 4 12 0s8 4 12 0M2 21c4-4 7 4 12 0s8 4 12 0M6 12c1-7 6-7 7 0m-6-4 3-5 3 5m5 5c1-6 5-6 6 0"/></svg><span>溪畔听风</span></button>
+    <button class="viewpoint" data-view="overlook" aria-pressed="false"><svg viewBox="0 0 28 28"><path d="m2 21 8-11 5 7 5-11 7 15H2Zm9-12 3-5 3 6M3 25h23"/></svg><span>远山层林</span></button>
+  </nav>
+
+  <aside class="settings-panel" id="settings-panel" hidden aria-label="画面设置">
+    <div class="panel-heading"><h2>让秋天慢一点</h2><button id="close-settings" class="close-button" aria-label="关闭设置">×</button></div>
+    <div class="setting-row"><label for="quality">渲染质量<small id="quality-note">自动平衡清晰度与帧率</small></label><select id="quality"><option value="auto">自动</option><option value="high">细腻</option><option value="balanced">均衡</option><option value="low">流畅</option></select></div>
+    <div class="setting-row"><label for="wind">林间风力<small>枝叶与落叶共享同一风场</small></label><input type="range" id="wind" min="0" max="100" value="45" aria-label="风力"></div>
+    <div class="setting-row"><label for="volume">体积光<small>枝叶遮挡下的光线步进散射</small></label><input class="switch" id="volume" type="checkbox" checked></div>
+    <div class="setting-row"><label for="reflections">溪水反射<small>屏幕空间光线追踪</small></label><input class="switch" id="reflections" type="checkbox" checked></div>
+    <div class="setting-row"><label for="motion">脚步起伏<small>关闭可减少镜头运动</small></label><input class="switch" id="motion" type="checkbox" checked></div>
+    <p class="performance"><span class="status-dot"></span><span id="performance-text">正在生成森林…</span></p>
+  </aside>
+
+  <dialog id="help-dialog">
+    <button class="close-button" id="close-help" aria-label="关闭漫游指南">×</button>
+    <span class="dialog-kicker">林 间 漫 步</span><h2>把自己交给秋天</h2>
+    <p>不必寻找终点。沿着小径，或走向任何一束光。</p>
+    <dl><div><dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>移动（方向键亦可）</dd></div><div><dt>鼠标</dt><dd>环顾四周，Esc 释放鼠标</dd></div><div><dt><kbd>Shift</kbd></dt><dd>快走</dd></div><div><dt><kbd>Space</kbd></dt><dd>轻轻跃起</dd></div><div><dt>触屏</dt><dd>左侧移动，右侧拖动环顾</dd></div></dl>
+    <p class="help-note">树干与岩石会阻挡你的脚步。走入浅溪，试试脚下荡开的水纹。</p>
+    <button class="dialog-enter" id="help-start">准备好了，走进森林</button>
+  </dialog>
+
+  <div class="mobile-controls" id="mobile-controls" aria-hidden="true">
+    <div id="move-pad" class="touch-pad"><span id="move-stick"></span><small>移动</small></div>
+    <div id="look-pad" class="look-pad"><small>拖动环顾</small></div>
+    <button id="jump-button" aria-label="跳跃">↑</button>
+  </div>
+  <div class="loading" id="loading"><div class="loading-leaf">❧</div><p>正在唤醒这片森林</p><span id="loading-detail">生长枝叶 · 收集光线</span><div class="loading-track"><i></i></div></div>
+  <div class="toast" id="toast" role="status"></div>
+  <div class="error-message" id="error-message" hidden><h2>这片森林需要 WebGL2</h2><p id="error-detail">请使用支持硬件加速的新版 Chrome、Edge、Firefox 或 Safari。</p><button onclick="location.reload()">重新进入</button></div>
+
+  <script src="js/math.js"></script>
+  <script src="js/textures.js"></script>
+  <script src="js/vegetation.js"></script>
+  <script src="js/world.js"></script>
+  <script src="js/shaders.js"></script>
+  <script src="js/renderer.js"></script>
+  <script src="js/physics.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
