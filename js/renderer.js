@@ -171,6 +171,7 @@
       this.batch('grasses',G.createGrass(855),w.grasses,4,{frustum:true,radius:.6,centerY:.3,maxDistance:34});
       this.batch('rocks',G.createRock(883),w.rocks,4,{texture:'stone',frustum:true,radius:1,centerY:.2});
       this.batch('logs',G.createLog(),w.logs,1,{texture:'bark',frustum:true,radius:3,centerY:.4});
+      this.batch('twigs',G.createTwig(),w.twigs,1,{texture:'bark',frustum:true,radius:1,centerY:.03,maxDistance:35});
       this.batch('leaf-litter',G.createGroundLeaf(),w.groundLeaves,2,{frustum:true,radius:.4,centerY:.05,maxDistance:48});
       this.batch('saplings',G.createTree(1,790,1,2).leaves,w.saplings,2,{frustum:true,radius:1.2,centerY:1,maxDistance:48});
       this.water=this.batch('water',G.createWater(w),null,5,{texture:'stone',shadow:false,frustum:false});

@@ -14,12 +14,12 @@
       this.yaw=this.target.yaw+(species==='bird'?1.3:.5);
       if(species==='squirrel'){
         const a=this.target,dx=Math.cos(a.treeAngle),dz=Math.sin(a.treeAngle);
-        this.yaw=Math.atan2(dx,dz)+.65;
+        this.yaw=Math.atan2(dx,dz)-.90;
       }else if(species==='bird'){
         const a=this.target,dx=a.position[0]-a.home.tree.position[0],dz=a.position[2]-a.home.tree.position[2];
-        this.yaw=Math.atan2(dx,dz)-.85;
+        this.yaw=Math.atan2(dx,dz)-1.0;
       }
-      this.pitch=species==='bird'?.12:.14;this.initialized=false;this.update(1,true);return true;
+      this.pitch=species==='bird'?.035:species==='squirrel'?.015:.14;this.initialized=false;this.update(1,true);return true;
     }
     cycle(direction){
       const list=this.ecology.bySpecies(this.species);if(!list.length)return;
@@ -34,9 +34,9 @@
       if(!this.initialized){this.position=[0,0,0];this.focus=[0,0,0];snap=true;this.initialized=true;}
       const a=this.target,focus=this.ecology.focusFor(a);
       if(a.species==='squirrel'){
-        const dx=a.position[0]-a.tree.position[0],dz=a.position[2]-a.tree.position[2],angle=Math.atan2(dx,dz)-.78;
+        const dx=a.position[0]-a.tree.position[0],dz=a.position[2]-a.tree.position[2],angle=Math.atan2(dx,dz)-.90;
         this.yaw+=(((angle-this.yaw+Math.PI)%(Math.PI*2)+Math.PI*2)%(Math.PI*2)-Math.PI)*Math.min(dt*2.5,1);
-        this.pitch=.10;
+        this.pitch=-.015;
       }
       const height=a.species==='deer'?1.25:a.species==='squirrel'?.23:.12;
       const target=[focus.position[0],focus.position[1]+height,focus.position[2]];

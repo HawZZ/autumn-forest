@@ -34,7 +34,7 @@
       const profile=F.geometry.createTree(0,3041,0,tree.variant).trunkProfile;
       const local=profile[Math.floor(profile.length*.62)];
       const center=[tree.position[0]+c*local[0]*scale+s*local[2]*scale,ground+local[1]*scale,tree.position[2]-s*local[0]*scale+c*local[2]*scale];
-      const nest={tree,position:[center[0]+.27,center[1]-.06,center[2]+.18],radius:.28,occupants:[]};this.nests.push(nest);
+      const nest={tree,position:[center[0]+.20,center[1]-.06,center[2]+.12],radius:.28,occupants:[]};this.nests.push(nest);
       for(let i=0;i<7;i++){
         const angle=i/7*TAU,perch=i<3?[nest.position[0]+Math.cos(angle)*.18,nest.position[1]+.04,nest.position[2]+Math.sin(angle)*.18]:[center[0]+Math.cos(angle)*2.5,center[1]+1.5+this.random()*1.8,center[2]+Math.sin(angle)*2.5];
         const a={id:this.nextId++,species:'bird',name:'大山雀 · 白颊黄腹',position:[...perch],yaw:angle+Math.PI,velocity:[0,0,0],state:i<3?'preen':'hop',stateTime:this.random()*2,stateDuration:3+this.random()*5,target:[...perch],perch:[...perch],home:nest,speed:0,alert:0,phase:this.random()*TAU,scale:1.45,energy:.7+this.random()*.2,roostUntil:0,pose:{head:0,legs:0,tail:0}};
@@ -105,7 +105,7 @@
         const fraction=clamp(a.treeHeight/profile[profile.length-1][1],0,1),index=Math.min(profile.length-2,Math.floor(fraction*(profile.length-1)));
         const p0=profile[index],p1=profile[index+1],f=fraction*(profile.length-1)-index;
         const cx=lerp(p0[0],p1[0],f),cz=lerp(p0[2],p1[2],f),radius=lerp(p0[3],p1[3],f)*t.scale[0];
-        const co=Math.cos(t.rotation),si=Math.sin(t.rotation),r=radius+.24;
+        const co=Math.cos(t.rotation),si=Math.sin(t.rotation),r=radius+.16;
         const centerX=base[0]+co*cx*t.scale[0]+si*cz*t.scale[0],centerZ=base[2]-si*cx*t.scale[0]+co*cz*t.scale[0];
         a.position[0]=centerX+Math.cos(a.treeAngle)*r;a.position[2]=centerZ+Math.sin(a.treeAngle)*r;
         a.position[1]=base[1]+a.treeHeight;

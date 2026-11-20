@@ -17,6 +17,12 @@
     float yaw=iRotationPart.w,cy=cos(yaw),sy=sin(yaw);
     p=vec3(cy*p.x+sy*p.z,p.y,-sy*p.x+cy*p.z);n=vec3(cy*n.x+sy*n.z,n.y,-sy*n.x+cy*n.z);
     p*=iPositionScale.w;
+    if(iColorTint.a>1.5){
+      vec3 center=vec3(0.,.22,0.);p-=center;
+      float lean=.42,cl=cos(lean),sl=sin(lean);
+      p=vec3(p.x,p.y*cl-p.z*sl,p.y*sl+p.z*cl);p+=center;
+      n=vec3(n.x,n.y*cl-n.z*sl,n.y*sl+n.z*cl);
+    }
     p+=iPositionScale.xyz;
     vWorld=p;vColor=aColor*iColorTint.rgb;vNormal=normalize(n);
     gl_Position=(uShadowPass>.5?uLightVP:uViewProjection)*vec4(p,1.);
@@ -25,6 +31,8 @@
   in vec3 vColor;in vec3 vNormal;in vec3 vWorld;
   uniform vec3 uCamera;uniform vec3 uSunDirection;uniform float uTime;uniform float uShadowPass;
   uniform highp sampler2DShadow uShadowNear;uniform mat4 uShadowVP0;
+  float hash12(vec2 p){vec3 p3=fract(vec3(p.xyx)*.1031);p3+=dot(p3,p3.yzx+33.33);return fract((p3.x+p3.y)*p3.z);}
+  float noise2(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash12(i),hash12(i+vec2(1,0)),f.x),mix(hash12(i+vec2(0,1)),hash12(i+1.),f.x),f.y);}
   layout(location=0)out vec4 outColor;layout(location=1)out vec2 outDistance;
   void main(){
     if(uShadowPass>.5)return;
@@ -34,10 +42,16 @@
     float visibility=1.;
     if(all(greaterThan(uv.xy,vec2(.003)))&&all(lessThan(uv.xy,vec2(.997)))&&uv.z<1.)visibility=texture(uShadowNear,vec3(uv.xy,uv.z-.00065));
     float ndl=max(dot(n,uSunDirection),0.),wrap=max((dot(n,uSunDirection)+.35)/1.35,0.);
-    vec3 ambient=mix(vec3(.20,.23,.18),vec3(.47,.52,.58),n.y*.5+.5);
-    vec3 light=ambient*.94+vec3(1.65,1.40,1.02)*(wrap*.70+.18)*(.23+visibility*.77);
-    float rim=pow(1.-max(dot(n,view),0.),3.)*.09;
-    vec3 color=vColor*light+vec3(.35,.30,.19)*rim;
+    vec3 ambient=mix(vec3(.20,.23,.18),vec3(.43,.48,.54),n.y*.5+.5);
+    float fiber=noise2(vWorld.xz*240.+vWorld.y*140.);
+    float grain=.91+fiber*.16;
+    vec3 light=ambient*.83+vec3(1.48,1.31,1.04)*(wrap*.62+.12)*(.25+visibility*.75);
+    float back=pow(max(dot(-view,uSunDirection),0.),3.)*max(dot(-n,uSunDirection),0.)*.15;
+    vec3 color=vColor*grain*(light+vec3(1.,.82,.54)*back);
+    float rim=pow(1.-max(dot(n,view),0.),3.)*.065;
+    color+=vColor*rim;
+    float spec=pow(max(dot(n,normalize(view+uSunDirection)),0.),24.)*.009;
+    color+=vec3(.42,.38,.28)*spec*visibility;
     float d=length(uCamera-vWorld);color=mix(color,vec3(.43,.51,.44),1.-exp(-d*.0055));
     outColor=vec4(color,1.);outDistance=vec2(d,0.);
   }`;
@@ -104,22 +118,22 @@
           const a=batch.animals[i],bodyYaw=a.yaw;
           let position=a.position,scale=a.scale;
           if(batch.species==='bird'&&batch.name==='head'){
-            scale*=.73;
+            scale*=.88;
           }
           let anchor=[0,0,0],angle=0,partYaw=bodyYaw,partScale=1;
           if(batch.name==='head'){
-            anchor=batch.species==='deer'||batch.species==='stag'?[0,1.80,-.69]:batch.species==='squirrel'?[0,.405,-.031]:[0,.158,-.034];
-            angle=a.species==='deer'?-a.pose.head*.82:a.species==='squirrel'?a.pose.head:a.pose.head*.6;
+            anchor=batch.species==='deer'||batch.species==='stag'?[0,1.73,-.74]:batch.species==='squirrel'?[0,.335,-.065]:[0,.158,-.034];
+            angle=a.species==='deer'?-a.pose.head*.98:a.species==='squirrel'?a.pose.head:a.pose.head*.6;
           }else if(batch.name==='leg'){
             const side=batch.legIndex<2?-1:1,front=batch.legIndex%2?1:-1;
             anchor=[side*.245,1.03,front*.43];angle=Math.sin(a.pose.legs+(batch.legIndex%2?Math.PI:0)+(batch.legIndex>1?.5:0))*(a.species==='deer'?(a.state==='flee'?.68:.34):.35);
           }else if(batch.name==='tail'){anchor=batch.species==='squirrel'?[0,.13,.11]:[0,1.37,.72];angle=batch.species==='squirrel'?a.pose.tail*.16:a.pose.tail;
-          }else if(batch.name==='arm'){anchor=[batch.legIndex%2?1:-1,0,0];anchor[0]*=.09;anchor[1]=.31;anchor[2]=-.045;angle=a.state==='eat'?-.55+Math.sin(this.ecology.time*10)*.12:-.10;
+          }else if(batch.name==='arm'){anchor=[batch.legIndex%2?1:-1,0,0];anchor[0]*=.09;anchor[1]=.265;anchor[2]=-.10;angle=a.state==='eat'?-.55+Math.sin(this.ecology.time*10)*.12:-.10;
           }else if(batch.name==='wing'){
             anchor=[batch.legIndex%2?.039:-.039,.108,-.003];const flying=['fly','returning','leave'].includes(a.state);
             angle=flying?Math.sin(this.ecology.time*34+a.phase)*.72:0;
             partYaw=bodyYaw+(batch.legIndex%2?1:-1)*angle*.72;
-            partScale=flying?1:.38;
+            partScale=flying?1:.48;
           }else if(batch.name==='foot')anchor=[batch.legIndex%2?.027:-.027,.048,.007];
           else if(batch.name==='acorn'){partScale=a.carrying?1:0;anchor=[0,.23,-.19];}
           const o=i*16;

@@ -2,16 +2,16 @@
   "errors": [],
   "gpu": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
   "fps": 120,
-  "drawCalls": 74,
-  "triangles": 3346546,
-  "frames": 802,
+  "drawCalls": 75,
+  "triangles": 3946421,
+  "frames": 801,
   "renderScale": 0.855,
   "position": [
-    3.0394249391110315,
-    0.1547739893596447,
-    7.626578636489584
+    3.0486980455811774,
+    0.14505273786692974,
+    7.3617409324208145
   ],
-  "distance": 26.389583333333583,
+  "distance": 26.654583333333626,
   "glError": 0,
   "passed": true,
   "viewport": [

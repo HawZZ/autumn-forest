@@ -99,11 +99,18 @@
     // A distant ring of layered hills is geometry, not a photographic backdrop.
     const mountains=[];
     for(const list of trees)for(let i=0;i<list.length;i++)addTreeCollider(list[i],trees.indexOf(list));
-    const ferns=[],grasses=[],rocks=[],groundLeaves=[],logs=[],waterObstacles=[];
+    const ferns=[],grasses=[],rocks=[],groundLeaves=[],logs=[],waterObstacles=[],twigs=[];
+    for(let i=0;i<950;i++){
+      const x=(random()-.5)*80,z=(random()-.5)*110;
+      if(Math.hypot(x,z)>62||creekDistance(x,z)<1.7)continue;
+      const angle=random()*Math.PI*2,scale=.06+random()*.16;
+      const a=makeInstance(x,z,[scale,.35+random()*.35,scale*.6],0,random,[.33+random()*.16,.26+random()*.12,.16],angle);
+      a.position[1]+=.015;twigs.push(a);
+    }
     for(let i=0;i<6500;i++){
       const x=(random()-.5)*150,z=(random()-.5)*160-14;
       if(Math.hypot(x,z)>92||creekDistance(x,z)<1.65||pathDistance(x,z)<1.0)continue;
-      const cluster=noise(x*.055+7,z*.055-4);if(cluster<-.16)continue;
+      const cluster=noise(x*.055+7,z*.055-4);if(cluster<-.02)continue;
       const scale=.48+random()*.82;
       ferns.push(makeInstance(x,z,scale,0,random,[.24+random()*.10,.31+random()*.11,.085+random()*.055]));
     }
@@ -135,8 +142,8 @@
     for(let i=0;i<36000;i++){
       const x=(random()-.5)*145,z=(random()-.5)*165-7;
       if(Math.hypot(x,z)>87||creekDistance(x,z)<1.1)continue;
-      const r=random(),color=r<.38?[.75+random()*.25,.20+random()*.18,.026]:r<.78?[1,.49+random()*.24,.035]:[.51+random()*.2,.29+random()*.13,.04];
-      groundLeaves.push(makeInstance(x,z,.14+random()*.15,0,random,color));
+      const r=random(),color=r<.38?[.55+random()*.22,.16+random()*.14,.023]:r<.78?[.79+random()*.16,.34+random()*.19,.030]:[.38+random()*.16,.23+random()*.10,.038];
+      groundLeaves.push(makeInstance(x,z,.08+random()*.11,0,random,color));
     }
     for(let i=0;i<90;i++){
       const x=(random()-.5)*110,z=(random()-.5)*125;
@@ -148,6 +155,6 @@
       creek:{name:'溪畔听风',description:'一溪秋水，半树金声',x:creekX(12)-3.5,z:12,yaw:-1.27,pitch:-.10},
       overlook:{name:'远山层林',description:'万叶着色，远山含烟',x:pathX(-62),z:-62,yaw:Math.PI+.08,pitch:.045}
     };
-    return {RADIUS,pathX,creekX,pathDistance,creekDistance,creekLevel,creekSlope,creekWidth,waterDepth,flowAt,height,normal,slope,trees,ferns,grasses,rocks,groundLeaves,logs,saplings,colliders,nearby,viewpoints,mountains,waterObstacles};
+    return {RADIUS,pathX,creekX,pathDistance,creekDistance,creekLevel,creekSlope,creekWidth,waterDepth,flowAt,height,normal,slope,trees,ferns,grasses,rocks,groundLeaves,logs,saplings,colliders,nearby,viewpoints,mountains,waterObstacles,twigs};
   };
 })(window.Forest);

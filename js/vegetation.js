@@ -137,14 +137,14 @@
         const start=curve[index],a=angle+(random()-.5)*1.7;
         const twigEnd=V.add(start,[Math.cos(a)*(.35+random()*.8),.08+random()*.68,Math.sin(a)*(.35+random()*.8)]);
         branch(wood,start,twigEnd,.020*(1-t*.60),.0045,random,[.28,.245,.17],.52,.94,lod?3:4);
-        const leaves=lod?7:type===1?18:15;
+        const leaves=lod?9:type===1?25:21;
         for(let k=0;k<leaves;k++){
           const along=.15+random()*.85,origin=V.add(start,V.scale(V.sub(twigEnd,start),along));
           const az=a+(k%2?1:-1)*(.50+random()*1.2)+(random()-.5)*.4;
           const spread=.06+random()*.60;
           const attach=V.add(origin,[Math.cos(az)*spread,(random()-.42)*.46,Math.sin(az)*spread]);
-          const d=V.normalize([Math.cos(az)*(.75+random()*.5),random()*.85-.43,Math.sin(az)*(.75+random()*.5)]);
-          const size=(type===1?.37:type===2?.43:.39)*(.65+random()*.70)*(lod?2.05:1);
+          const d=V.normalize([Math.cos(az)*(.68+random()*.55),random()*.45-.46,Math.sin(az)*(.68+random()*.55)]);
+          const size=(type===1?.27:type===2?.33:.28)*(.65+random()*.70)*(lod?2.05:1);
           const shade=.80+random()*.26;
           const form={twist:(random()-.5)*2.5,curl:.04+random()*.62,droop:random()*.75,asymmetry:.73+random()*.52,width:.73+random()*.47,thickness:.0028+random()*.0035};
           leaf(foliage,attach,d,size,type,random,shade,.82+random()*.18,lod,form);
@@ -245,6 +245,13 @@
     for(let j=0;j<rows.length-1;j++)for(let i=0;i<12;i++)m.quad(rows[j][i],rows[j][i+1],rows[j+1][i+1],rows[j+1][i]);
     return m.finish();
   }
+  function createTwig(){
+    const mesh=new Mesh();
+    const path=smoothPath([[-.7,.01,0],[-.35,.025,.025],[.15,.015,-.018],[.65,.008,.02]],3);
+    tube(mesh,path,path.map((_,i)=>.018*(1-i/(path.length*1.1))),6,[.24,.19,.11],0,0);
+    branch(mesh,[.1,.02,-.01],[.35,.08,.13],.009,.003,rng(90),[.24,.19,.11],0,0,5);
+    return mesh.finish();
+  }
   function createMountains(){
     const m=new Mesh();
     for(let ring=0;ring<3;ring++){
@@ -259,5 +266,5 @@
     }return m.finish();
   }
   function createGroundLeaf(){const m=new Mesh();leaf(m,[0,.012,0],[0,0,1],1,0,rng(91),1,0,1,{twist:.15,curl:.35,droop:.18,asymmetry:.93,width:1,thickness:.005});return m.finish();}
-  F.geometry={Mesh,leaf,createTree,createFern,createGrass,createRock,createLog,createTerrain,createWater,createMountains,createGroundLeaf};
+  F.geometry={Mesh,leaf,createTree,createFern,createGrass,createRock,createLog,createTwig,createTerrain,createWater,createMountains,createGroundLeaf};
 })(window.Forest);

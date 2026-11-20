@@ -93,16 +93,26 @@
     if(uMode<.5){
       float path=1.-smoothstep(.78,1.85,abs(vWorld.x-uPathX));
       float litter=fbm2(vWorld.xz*1.35);
-      albedo*=mix(vec3(.51,.57,.44),vec3(1.13,.99,.76),path)*(.84+litter*.36)*tex*1.12;
-      float creek=1.-smoothstep(1.5,3.8,abs(vWorld.x-uCreekX));albedo*=1.-creek*.32;
+      albedo*=mix(vec3(.48,.46,.31),vec3(.95,.79,.52),path)*(.72+litter*.42)*tex*.92;
+      float creek=1.-smoothstep(1.5,3.8,abs(vWorld.x-uCreekX));albedo*=1.-creek*.38;
+      float fine=noise2(vWorld.xz*52.)*.16;
+      float damp=noise2(vWorld.xz*.62+11.3);
+      float leafBits=noise2(vWorld.xz*19.0+vec2(7.4,1.8));
+      albedo*=.75+fine+damp*.15+leafBits*.13;
+      float moss=noise2(vWorld.xz*4.6+2.1);
+      albedo=mix(albedo,albedo*vec3(.78,.90,.57),moss*.25);
     }else if(uMode<1.5){
       float ridge=fbm2(vec2(vUV.x*34.,vUV.y*1.2));
       float grooves=fbm2(vec2(vUV.x*110.+ridge*3.,vUV.y*2.2));
-      albedo*=tex*(.91+ridge*.26+grooves*.11);
+      albedo*=tex*(.85+ridge*.30+grooves*.13);
+      float lichen=smoothstep(.68,.90,noise2(vWorld.xz*3.5+vUV*7.));
+      albedo=mix(albedo,vec3(.16,.19,.095),lichen*.18);
       float sideLight=pow(max(dot(n,normalize(uSunDirection+view)),0.),12.)*.035;
       albedo+=vec3(.10,.08,.045)*sideLight;
     }else if(uMode<2.5){
-      albedo*=.79;
+      albedo*=.73;
+      float pigment=noise2(vWorld.xz*1.8+vPhase*.17);
+      albedo*=mix(vec3(.88,.90,.73),vec3(1.02,.92,.78),pigment);
       float midrib=1.-smoothstep(.005,.025,abs(vUV.x-.5));
       float sideVeins=pow(.5+.5*sin((vUV.y*13.+abs(vUV.x-.5)*9.)*3.14159),16.);
       float veinMask=clamp(midrib*.14+sideVeins*.045,0.,.20);
@@ -111,7 +121,7 @@
     }else{albedo*=tex*1.03;}
     float visibility=readShadow(vWorld,n,uSunDirection);
     float ndl=max(dot(n,uSunDirection),0.),leaf=step(.5,vLeaf);
-    vec3 ambient=mix(vec3(.19,.21,.16),vec3(.38,.44,.49),n.y*.5+.5);
+    vec3 ambient=mix(vec3(.19,.23,.19),vec3(.38,.46,.53),n.y*.5+.5);
     float transmission=pow(max(dot(-view,uSunDirection),0.),3.)*max(dot(-n,uSunDirection),0.)*leaf;
     float wrap=max((dot(n,uSunDirection)+.28)/1.28,0.);
     float contact=1.;
@@ -125,7 +135,7 @@
     float dist=length(uCamera-vWorld);
     // Subpixel foliage settles softly instead of shimmering into disconnected hard pixels.
     if(leaf>.5)col=mix(col,uFogColor*.86,smoothstep(38.,108.,dist)*.16);
-    float fog=1.-exp(-dist*.0055);
+    float fog=1.-exp(-dist*.0042);
     float sunAmount=pow(max(dot(-view,uSunDirection),0.),9.);
     vec3 fogColor=mix(uFogColor,vec3(.71,.66,.47),sunAmount*.33);
     col=mix(col,fogColor,fog);

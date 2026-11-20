@@ -21,8 +21,8 @@
       F.anatomy.furLock(skin,root,[Math.cos(a)*.2,.1,Math.sin(a)*.2],.023,.025,[.13,.19,.065]);
     }
     // Three thin supports reach back into the actual branch fork.
-    F.anatomy.organic(skin,[[-.29,-.085,-.06],[-.08,-.045,.0],[.08,-.035,.01]],[.012,.008,.005],colors[0],{sides:7});
-    F.anatomy.organic(skin,[[.28,-.08,.11],[.06,-.045,.0],[-.04,-.025,-.02]],[.011,.007,.004],colors[0],{sides:7});
+    F.anatomy.organic(skin,[[-.18,-.085,-.05],[-.045,-.04,0],[.08,-.025,.01]],[.012,.008,.005],colors[0],{sides:7});
+    F.anatomy.organic(skin,[[.18,-.075,.09],[.045,-.035,.0],[-.04,-.025,-.02]],[.011,.007,.004],colors[0],{sides:7});
     return skin.finish();
   }
   F.createWildlifeNest=createNest;
