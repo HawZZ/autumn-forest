@@ -5,6 +5,7 @@
   const isTouch=matchMedia('(pointer:coarse)').matches;
   const keys=new Set();let renderer,player,world,started=false,locked=false,lastTime=0,accumulator=0,simTime=0;
   let toastTimer,dragging=false,dragX=0,dragY=0,movePointer=null,lookPointer=null,moveOrigin=null;
+  let ecology,observer,wildlifeRenderer,observeFade=0;
   let audio=null,audioEnabled=false,birdTimer=null;
   const touchMove={x:0,y:0};
   function toast(text){$('toast').textContent=text;$('toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),2900);}
@@ -19,7 +20,7 @@
     player.input.sprint=keys.has('ShiftLeft')||keys.has('ShiftRight');
   }
   function requestLock(){
-    if(isTouch)return;
+    if(isTouch||observer?.active)return;
     try{
       const promise=$('forest').requestPointerLock();
       if(promise&&promise.catch)promise.catch(()=>{toast('可按住鼠标左键拖动视角');});
@@ -27,6 +28,7 @@
   }
   function begin(){
     if(!player)return;
+    if(observer?.active)leaveObserver();
     started=true;document.body.classList.add('exploring');
     $('entry-panel').setAttribute('aria-hidden','true');$('resume-button').hidden=true;
     $('forest').focus({preventScroll:true});requestLock();
@@ -72,6 +74,30 @@
       toast(audioEnabled?'风与鸟鸣 · 自然声音已开启':'自然声音已关闭');
     }catch(error){toast('声音未能开启，请再次点击声音按钮');}
   }
+  function observe(species){
+    if(!ecology)return;
+    if(!started){started=true;document.body.classList.add('exploring');$('entry-panel').setAttribute('aria-hidden','true');}
+    if(document.pointerLockElement)document.exitPointerLock();
+    observer.select(species);document.body.classList.add('observing');
+    $('observer-hud').hidden=false;$('resume-button').hidden=true;
+    document.querySelectorAll('[data-animal]').forEach(button=>button.classList.toggle('active',button.dataset.animal===species));
+    updateObserverHUD();
+  }
+  function leaveObserver(){
+    if(!observer)return;
+    observer.leave();document.body.classList.remove('observing');$('observer-hud').hidden=true;
+    keys.clear();player.input.forward=player.input.strafe=0;player.input.sprint=false;player.input.jump=false;
+    document.querySelectorAll('[data-animal]').forEach(button=>button.classList.remove('active'));
+  }
+  function updateObserverHUD(){
+    if(!observer?.active)return;
+    const a=observer.target;
+    $('observer-name').textContent=a.name;
+    $('observer-state').textContent=ecology.label(a);
+    const facts={deer:'入冬前颈鬃与冬毛渐密，体色变深，白斑减弱；取食蕨类、草本与林下枝叶，时刻警惕脚步声。',squirrel:'冬季耳簇加长、绒毛更密。白天在枝头与地面觅食，将橡实藏入树皮或落叶下，不会冬眠。',bird:'白颊、黄腹与黑色胸腹纵纹。深秋成小群觅食，回旧巢或树洞理羽、整理巢材并停栖避风。'};
+    $('observer-fact').textContent=facts[a.species];
+    $('observer-foliage').textContent=observer.target.species==='bird'?'已柔化遮挡鸟巢的前景枝叶':'已柔化观察目标前的枝叶';
+  }
   function bindUI(){
     $('enter-button').addEventListener('click',begin);$('resume-button').addEventListener('click',begin);
     $('help-start').addEventListener('click',()=>{$('help-dialog').close();begin();});
@@ -90,9 +116,20 @@
     $('reflections').addEventListener('change',event=>{renderer.reflections=event.target.checked;});
     $('motion').addEventListener('change',event=>{player.bobEnabled=event.target.checked;});
     document.querySelectorAll('.viewpoint').forEach(button=>button.addEventListener('click',()=>goToView(button.dataset.view)));
-    $('home-link').addEventListener('click',event=>{event.preventDefault();goToView('path');});
+    $('home-link').addEventListener('click',event=>{event.preventDefault();if(observer?.active)leaveObserver();goToView('path');});
+    document.querySelectorAll('[data-animal]').forEach(button=>button.addEventListener('click',()=>observe(button.dataset.animal)));
+    $('previous-animal').addEventListener('click',()=>{observer.cycle(-1);updateObserverHUD();});
+    $('next-animal').addEventListener('click',()=>{observer.cycle(1);updateObserverHUD();});
+    $('leave-observer').addEventListener('click',()=>{leaveObserver();if(!isTouch)requestLock();});
+    $('forest').addEventListener('wheel',event=>{if(observer?.active){event.preventDefault();observer.zoom(event.deltaY*.004);}},{passive:false});
     addEventListener('keydown',event=>{
       if(['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName))return;
+      if(observer?.active){
+        if(event.code==='KeyQ'){observer.cycle(-1);updateObserverHUD();event.preventDefault();return;}
+        if(event.code==='KeyE'){observer.cycle(1);updateObserverHUD();event.preventDefault();return;}
+        if(event.code==='KeyV'){leaveObserver();if(!isTouch)requestLock();event.preventDefault();return;}
+        if(event.code==='Escape'){leaveObserver();event.preventDefault();return;}
+      }
       if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.code)&&started)event.preventDefault();
       if(event.code==='Enter'&&started&&!locked&&!isTouch&&!$('help-dialog').open)requestLock();
       if(event.code==='Escape'){$('settings-panel').hidden=true;$('settings-button').setAttribute('aria-expanded','false');}
@@ -108,27 +145,34 @@
     document.addEventListener('mousemove',event=>{
       if(!started||!player)return;
       if(locked){player.yaw-=event.movementX*.00205;player.pitch=clamp(player.pitch-event.movementY*.00185,-1.38,1.38);}
-      else if(dragging){player.yaw-=(event.clientX-dragX)*.003;player.pitch=clamp(player.pitch-(event.clientY-dragY)*.0027,-1.38,1.38);dragX=event.clientX;dragY=event.clientY;}
+      else if(dragging){
+        if(observer?.active)observer.rotate((event.clientX-dragX)*.004,(event.clientY-dragY)*.003);
+        else{player.yaw-=(event.clientX-dragX)*.003;player.pitch=clamp(player.pitch-(event.clientY-dragY)*.0027,-1.38,1.38);}
+        dragX=event.clientX;dragY=event.clientY;
+      }
     });
     $('forest').addEventListener('mousedown',event=>{if(event.button!==0||!started||locked||isTouch)return;dragging=true;dragX=event.clientX;dragY=event.clientY;});
     addEventListener('mouseup',()=>dragging=false);
-    $('forest').addEventListener('click',()=>{if(started&&!locked&&!isTouch&&!dragging&&$('settings-panel').hidden&&!$('help-dialog').open)requestLock();});
+    $('forest').addEventListener('click',()=>{if(started&&!locked&&!isTouch&&!observer?.active&&!dragging&&$('settings-panel').hidden&&!$('help-dialog').open)requestLock();});
     bindTouch();
     document.addEventListener('visibilitychange',()=>{lastTime=0;accumulator=0;if(audio){if(document.hidden)audio.ctx.suspend();else if(audioEnabled)audio.ctx.resume();}});
     $('forest').addEventListener('webglcontextlost',event=>{event.preventDefault();$('error-message').hidden=false;$('error-detail').textContent='图形上下文暂时中断。请关闭其他高负载页面，然后点击重新进入。';});
   }
   function bindTouch(){
     const pad=$('move-pad'),stick=$('move-stick'),look=$('look-pad');let lookLast=null;
-    pad.addEventListener('pointerdown',event=>{event.preventDefault();movePointer=event.pointerId;moveOrigin=[event.clientX,event.clientY];pad.setPointerCapture(event.pointerId);});
+    pad.addEventListener('pointerdown',event=>{event.preventDefault();if(observer?.active){lookPointer=event.pointerId;lookLast=[event.clientX,event.clientY];pad.setPointerCapture(event.pointerId);return;}movePointer=event.pointerId;moveOrigin=[event.clientX,event.clientY];pad.setPointerCapture(event.pointerId);});
     pad.addEventListener('pointermove',event=>{
+      if(observer?.active&&event.pointerId===lookPointer){observer.rotate((event.clientX-lookLast[0])*.004,(event.clientY-lookLast[1])*.003);lookLast=[event.clientX,event.clientY];return;}
       if(event.pointerId!==movePointer)return;
       let dx=(event.clientX-moveOrigin[0])/37,dy=(event.clientY-moveOrigin[1])/37;const l=Math.hypot(dx,dy);if(l>1){dx/=l;dy/=l;}
       touchMove.x=dx;touchMove.y=dy;stick.style.transform=`translate(${dx*26}px,${dy*26}px)`;
     });
-    const releaseMove=event=>{if(event.pointerId!==movePointer)return;movePointer=null;touchMove.x=touchMove.y=0;stick.style.transform='';};
+    const releaseMove=event=>{if(observer?.active){if(event.pointerId===lookPointer)lookPointer=null;return;}if(event.pointerId!==movePointer)return;movePointer=null;touchMove.x=touchMove.y=0;stick.style.transform='';};
     pad.addEventListener('pointerup',releaseMove);pad.addEventListener('pointercancel',releaseMove);
     look.addEventListener('pointerdown',event=>{event.preventDefault();lookPointer=event.pointerId;lookLast=[event.clientX,event.clientY];look.setPointerCapture(event.pointerId);});
-    look.addEventListener('pointermove',event=>{if(event.pointerId!==lookPointer)return;player.yaw-=(event.clientX-lookLast[0])*.004;player.pitch=clamp(player.pitch-(event.clientY-lookLast[1])*.0036,-1.38,1.38);lookLast=[event.clientX,event.clientY];});
+    look.addEventListener('pointermove',event=>{if(event.pointerId!==lookPointer)return;
+      if(observer?.active)observer.rotate((event.clientX-lookLast[0])*.004,(event.clientY-lookLast[1])*.003);
+      else{player.yaw-=(event.clientX-lookLast[0])*.004;player.pitch=clamp(player.pitch-(event.clientY-lookLast[1])*.0036,-1.38,1.38);}lookLast=[event.clientX,event.clientY];});
     const releaseLook=event=>{if(event.pointerId===lookPointer)lookPointer=null;};look.addEventListener('pointerup',releaseLook);look.addEventListener('pointercancel',releaseLook);
     $('jump-button').addEventListener('pointerdown',event=>{event.preventDefault();player.input.jump=true;});$('jump-button').addEventListener('pointerup',()=>player.input.jump=false);$('jump-button').addEventListener('pointercancel',()=>player.input.jump=false);
   }
@@ -138,13 +182,20 @@
     const dt=Math.min((timestamp-lastTime)/1000,.08);lastTime=timestamp;
     renderer.time+=dt;
     if(started&&!document.hidden){
-      updateInput();accumulator+=dt;let iterations=0;
+      if(observer?.active){
+        player.input.forward=player.input.strafe=0;player.input.sprint=false;player.input.jump=false;
+        observer.update(dt);
+      }else updateInput();
+      accumulator+=dt;let iterations=0;
       while(accumulator>=1/120&&iterations<10){simTime+=1/120;player.update(1/120,simTime);accumulator-=1/120;iterations++;}
-      const degrees=(((-player.yaw*180/Math.PI)%360)+360)%360;
-      $('heading').textContent=String(Math.round(degrees)).padStart(3,'0')+'°';
+      ecology.update(dt);
+      observeFade+=((observer?.active?1:0)-observeFade)*Math.min(dt*3.5,1);
+      wildlifeRenderer.update();
+      if(observer?.active)updateObserverHUD();
+      if(renderer.frameCounter%20===0)$('heading').textContent=String(Math.round((ecology.timeOfDay*24+5)%24)).padStart(2,'0')+'时';
     }
     try{
-      renderer.render(player.camera(),player.forward(),dt);renderer.updatePerformance(dt);
+      renderer.render(observer?.active?observer.camera():player.camera(),observer?.active?observer.viewForward():player.forward(),dt);renderer.updatePerformance(dt);
       if(renderer.frameCounter%90===0)$('performance-text').textContent=`${renderer.lastFPS} FPS · ${(renderer.triangles/1e6).toFixed(1)}M 三角面 · ${renderer.drawCalls} 次绘制`;
     }catch(error){renderer=null;fatal(error);return;}
     requestAnimationFrame(frame);
@@ -155,9 +206,12 @@
       $('loading-detail').textContent='生成地形 · 混交林与溪谷';
       await new Promise(resolve=>setTimeout(resolve,70));
       world=F.createWorld();player=new F.Player(world);F.player=player;
+      ecology=new F.Ecology(world);observer=new F.Observer(ecology,player);
       $('loading-detail').textContent='雕刻枝叶 · 铺设林间光影';
       await new Promise(resolve=>setTimeout(resolve,50));
       renderer=new F.Renderer($('forest'),world);F.renderer=renderer;
+      wildlifeRenderer=new F.WildlifeRenderer(renderer,ecology);renderer.wildlife=wildlifeRenderer;
+      wildlifeRenderer.update();
       if(matchMedia('(prefers-reduced-motion: reduce)').matches){player.bobEnabled=false;$('motion').checked=false;}
       renderer.resize();
       $('loading-detail').textContent='唤醒风、流水与第一束光';
@@ -166,7 +220,7 @@
       window.Forest.renderer=renderer;window.Forest.player=player;
       $('loading').classList.add('finished');
       // Read-only diagnostics are intentionally available to automated smoke tests.
-      window.__forest={world,player,renderer,get started(){return started;},get locked(){return locked;},goToView,pauseRendering(){renderer=null;}};
+      window.__forest={world,player,ecology,observer,wildlife:wildlifeRenderer,renderer,get started(){return started;},get locked(){return locked;},goToView,observe,leaveObserver,pauseRendering(){renderer=null;}};
       requestAnimationFrame(frame);
     }catch(error){fatal(error);}
   }

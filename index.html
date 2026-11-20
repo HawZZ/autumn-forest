@@ -70,11 +70,25 @@
     <button class="close-button" id="close-help" aria-label="关闭漫游指南">×</button>
     <span class="dialog-kicker">林 间 漫 步</span><h2>把自己交给秋天</h2>
     <p>不必寻找终点。沿着小径，或走向任何一束光。</p>
-    <dl><div><dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>移动（方向键亦可）</dd></div><div><dt>鼠标</dt><dd>环顾四周，Esc 释放鼠标</dd></div><div><dt><kbd>Shift</kbd></dt><dd>快走</dd></div><div><dt><kbd>Space</kbd></dt><dd>轻轻跃起</dd></div><div><dt>触屏</dt><dd>左侧移动，右侧拖动环顾</dd></div></dl>
+    <dl><div><dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>移动（方向键亦可）</dd></div><div><dt>鼠标</dt><dd>环顾四周，Esc 释放鼠标</dd></div><div><dt><kbd>Shift</kbd></dt><dd>快走</dd></div><div><dt><kbd>Space</kbd></dt><dd>轻轻跃起</dd></div><div><dt><kbd>Q</kbd><kbd>E</kbd></dt><dd>切换观察的动物</dd></div><div><dt><kbd>V</kbd></dt><dd>返回第一人称漫游</dd></div></dl>
     <p class="help-note">树干与岩石会阻挡你的脚步。走入浅溪，试试脚下荡开的水纹。</p>
     <button class="dialog-enter" id="help-start">准备好了，走进森林</button>
   </dialog>
 
+  <nav class="wildlife-bar" id="wildlife-bar" aria-label="自然观察">
+    <span class="wildlife-title">林中居民</span>
+    <button data-animal="deer" title="观察梅花鹿"><span class="animal-symbol">鹿</span><span>梅花鹿</span></button>
+    <button data-animal="squirrel" title="观察松鼠"><span class="animal-symbol">鼠</span><span>松鼠</span></button>
+    <button data-animal="bird" title="观察大山雀与归巢"><span class="animal-symbol">鸟</span><span>大山雀</span></button>
+  </nav>
+  <section class="observer-hud" id="observer-hud" hidden aria-live="polite">
+    <div class="observer-topline"><span class="observer-dot"></span>自然观察 · 自主行动</div>
+    <h2 id="observer-name">梅花鹿</h2><p id="observer-state">林间取食</p>
+    <p id="observer-fact">入冬前毛发渐密，体色变深，白斑不再如夏季醒目。</p>
+    <div class="observer-actions"><button id="previous-animal" aria-label="上一位动物">Q <span>上一位</span></button><button id="next-animal" aria-label="下一位动物">E <span>下一位</span></button><button id="leave-observer">V <span>返回漫游</span></button></div>
+    <p class="observer-tip">拖动绕看 · 滚轮调整距离 · 不操纵动物</p>
+    <p class="observer-foliage" id="observer-foliage" hidden>已柔化遮挡鸟巢的前景枝叶</p>
+  </section>
   <div class="mobile-controls" id="mobile-controls" aria-hidden="true">
     <div id="move-pad" class="touch-pad"><span id="move-stick"></span><small>移动</small></div>
     <div id="look-pad" class="look-pad"><small>拖动环顾</small></div>
@@ -85,12 +99,17 @@
   <div class="error-message" id="error-message" hidden><h2>这片森林需要 WebGL2</h2><p id="error-detail">请使用支持硬件加速的新版 Chrome、Edge、Firefox 或 Safari。</p><button onclick="location.reload()">重新进入</button></div>
 
   <script src="js/math.js"></script>
+  <script src="js/anatomy.js"></script>
+  <script src="js/nest.js"></script>
+  <script src="js/ecology.js"></script>
+  <script src="js/observer.js"></script>
   <script src="js/textures.js"></script>
   <script src="js/vegetation.js"></script>
   <script src="js/world.js"></script>
   <script src="js/shaders.js"></script>
   <script src="js/renderer.js"></script>
   <script src="js/physics.js"></script>
+  <script src="js/wildlife.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>

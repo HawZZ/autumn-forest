@@ -31,7 +31,7 @@
       if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error(name+' link: '+gl.getProgramInfoLog(p));
       const uniforms={},types={};const count=gl.getProgramParameter(p,gl.ACTIVE_UNIFORMS);
       for(let i=0;i<count;i++){const info=gl.getActiveUniform(p,i);const key=info.name.replace(/\[0\]$/,'');uniforms[key]=gl.getUniformLocation(p,info.name);types[key]=info.type;}
-      this.programs[name]={p,u:uniforms,types};return p;
+      this.programs[name]={p,u:uniforms,types};return this.programs[name];
     }
     use(p){this.gl.useProgram(p.p);this.currentProgram=p;}
     init(){
@@ -311,6 +311,7 @@
         for(const batch of this.shadowBatches){
           this.uniforms(p,{uMode:batch.mode});this.drawBatch(batch,batch.visibleCount,true);
         }
+        if(this.wildlife)this.wildlife.draw(true);
       }
     }
     render(camera,forward,dt){
@@ -346,6 +347,9 @@
       this.uniforms(p,{uViewProjection:vp,uCamera:camera,uSunDirection:this.sun,uTime:this.time,uWind:this.wind,uFogColor:[.43,.51,.44]});
       this.setShadowUniforms(p);
       this.uniforms(p,{uPathX:this.world.pathX(camera[2]),uCreekX:this.world.creekX(camera[2])});
+      const observeTarget=window.Forest.observer;
+      const focus=observeTarget?.active?observeTarget.focusData():null;
+      this.uniforms(p,{uObserveTarget:focus?focus.position:[0,0,0],uObserveDistance:focus?observeTarget.distanceActual:0,uObserveStrength:focus?1:0});
       for(const batch of this.visibleBatches){
         if(batch.name==='water')continue;
         this.uniforms(p,{uMode:batch.mode});
@@ -353,6 +357,7 @@
         this.drawBatch(batch,batch.visibleCount);
       }
       for(const lowLeaves of this.farBatches){this.uniforms(p,{uMode:2});this.drawBatch(lowLeaves,lowLeaves.visibleCount);}
+      if(this.wildlife)this.wildlife.draw(false);
       this.drawParticles();
       p=this.pass('sky',this.targets.scene);gl.drawBuffers([gl.COLOR_ATTACHMENT0,gl.COLOR_ATTACHMENT1]);gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.depthMask(false);
       this.uniforms(p,{uInverseVP:invVP,uCamera:camera,uSunDirection:this.sun,uTime:this.time});gl.bindVertexArray(this.fullVAO);gl.drawArrays(gl.TRIANGLES,0,3);this.drawCalls++;

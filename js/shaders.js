@@ -83,6 +83,7 @@
   in vec3 vWorld;in vec3 vNormal;in vec2 vUV;in vec3 vColor;in float vLeaf;in float vPhase;
   uniform vec3 uCamera;uniform vec3 uSunDirection;uniform sampler2D uTexture;
   uniform float uTime;uniform float uMode;uniform float uPathX;uniform float uCreekX;uniform vec3 uFogColor;
+  uniform vec3 uObserveTarget;uniform float uObserveStrength;uniform float uObserveDistance;
   layout(location=0)out vec4 outColor;
   layout(location=1)out vec2 outDistance;
   void main(){
@@ -128,6 +129,19 @@
     float sunAmount=pow(max(dot(-view,uSunDirection),0.),9.);
     vec3 fogColor=mix(uFogColor,vec3(.71,.66,.47),sunAmount*.33);
     col=mix(col,fogColor,fog);
+    float fade=0.;
+    if(uObserveStrength>.001&&(leaf>.5||uMode>.5&&uMode<1.5)){
+      vec3 targetRay=uObserveTarget-uCamera,rayToFragment=vWorld-uCamera;
+      float along=dot(rayToFragment,normalize(targetRay));
+      float miss=length(rayToFragment-normalize(targetRay)*along);
+      float width=.50+uObserveDistance*.065;
+      float center=1.-smoothstep(width*.30,width,miss);
+      float inFront=(1.-smoothstep(uObserveDistance-.6,uObserveDistance+.4,along))*step(.04,along);
+      float screenDoor=hash12(floor(gl_FragCoord.xy/2.));
+      fade=center*inFront*uObserveStrength;
+      if(leaf<.5)fade*=.75;
+      if(screenDoor<fade*.88)discard;
+    }
     outColor=vec4(col,1.);outDistance=vec2(dist,0.);
   }`;
   const depthVS=head+wind+`

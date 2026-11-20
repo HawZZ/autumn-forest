@@ -1,0 +1,459 @@
+{
+  "errors": [],
+  "checks": {
+    "deer": {
+      "active": true,
+      "species": "deer",
+      "distance": 6.93242024486493,
+      "position": [
+        10.474507286003226,
+        1.4849973844245947,
+        14.685591311110525
+      ],
+      "state": "graze",
+      "gl": 0
+    },
+    "squirrel": {
+      "active": true,
+      "species": "squirrel",
+      "distance": 1.7426696986342327,
+      "position": [
+        -11.089657405595768,
+        5.778924540404734,
+        34.86716897076218
+      ],
+      "state": "climb",
+      "gl": 0
+    },
+    "bird": {
+      "active": true,
+      "species": "bird",
+      "distance": 1.6686239942199108,
+      "position": [
+        -5.252760795122463,
+        8.748073790236262,
+        18.99867466690653
+      ],
+      "state": "preen",
+      "gl": 0
+    }
+  },
+  "behavior": {
+    "bird": {
+      "states": [
+        "returning",
+        "preen",
+        "preen",
+        "arrange",
+        "feed",
+        "roost",
+        "roost",
+        "roost",
+        "roost",
+        "roost",
+        "roost",
+        "roost"
+      ],
+      "distance": 0.1897366596101024,
+      "roost": true,
+      "leaves": true,
+      "maxNestDistance": 5.664532684154129,
+      "transitions": [
+        {
+          "id": 10,
+          "state": "fly",
+          "time": 1.8883000000000036
+        },
+        {
+          "id": 10,
+          "state": "returning",
+          "time": 426.05
+        },
+        {
+          "id": 11,
+          "state": "returning",
+          "time": 426.05
+        },
+        {
+          "id": 12,
+          "state": "returning",
+          "time": 426.05
+        },
+        {
+          "id": 13,
+          "state": "returning",
+          "time": 426.05
+        },
+        {
+          "id": 9,
+          "state": "arrange",
+          "time": 426.25000000000006
+        },
+        {
+          "id": 8,
+          "state": "arrange",
+          "time": 427.0000000000002
+        },
+        {
+          "id": 12,
+          "state": "look",
+          "time": 427.4000000000003
+        },
+        {
+          "id": 13,
+          "state": "look",
+          "time": 427.45000000000033
+        },
+        {
+          "id": 11,
+          "state": "look",
+          "time": 427.50000000000034
+        },
+        {
+          "id": 10,
+          "state": "look",
+          "time": 427.95000000000044
+        },
+        {
+          "id": 7,
+          "state": "arrange",
+          "time": 429.30000000000075
+        },
+        {
+          "id": 12,
+          "state": "preen",
+          "time": 430.450000000001
+        },
+        {
+          "id": 13,
+          "state": "preen",
+          "time": 430.500000000001
+        },
+        {
+          "id": 11,
+          "state": "preen",
+          "time": 430.55000000000103
+        },
+        {
+          "id": 10,
+          "state": "preen",
+          "time": 431.00000000000114
+        },
+        {
+          "id": 9,
+          "state": "feed",
+          "time": 433.70000000000175
+        },
+        {
+          "id": 8,
+          "state": "feed",
+          "time": 437.25000000000256
+        },
+        {
+          "id": 9,
+          "state": "roost",
+          "time": 437.7500000000027
+        },
+        {
+          "id": 11,
+          "state": "arrange",
+          "time": 438.2000000000028
+        },
+        {
+          "id": 7,
+          "state": "feed",
+          "time": 438.8000000000029
+        },
+        {
+          "id": 10,
+          "state": "arrange",
+          "time": 438.8000000000029
+        },
+        {
+          "id": 13,
+          "state": "arrange",
+          "time": 439.5500000000031
+        },
+        {
+          "id": 8,
+          "state": "roost",
+          "time": 441.3000000000035
+        },
+        {
+          "id": 12,
+          "state": "arrange",
+          "time": 442.2500000000037
+        },
+        {
+          "id": 7,
+          "state": "roost",
+          "time": 442.85000000000383
+        },
+        {
+          "id": 11,
+          "state": "feed",
+          "time": 445.95000000000454
+        },
+        {
+          "id": 13,
+          "state": "feed",
+          "time": 446.6000000000047
+        },
+        {
+          "id": 12,
+          "state": "feed",
+          "time": 449.8500000000054
+        },
+        {
+          "id": 11,
+          "state": "roost",
+          "time": 450.00000000000546
+        },
+        {
+          "id": 10,
+          "state": "feed",
+          "time": 450.50000000000557
+        },
+        {
+          "id": 13,
+          "state": "roost",
+          "time": 450.6500000000056
+        },
+        {
+          "id": 12,
+          "state": "roost",
+          "time": 453.90000000000634
+        },
+        {
+          "id": 10,
+          "state": "roost",
+          "time": 454.5500000000065
+        },
+        {
+          "id": 7,
+          "state": "leave",
+          "time": 630.05
+        },
+        {
+          "id": 8,
+          "state": "leave",
+          "time": 630.05
+        },
+        {
+          "id": 9,
+          "state": "leave",
+          "time": 630.05
+        },
+        {
+          "id": 10,
+          "state": "leave",
+          "time": 630.05
+        },
+        {
+          "id": 11,
+          "state": "leave",
+          "time": 630.05
+        },
+        {
+          "id": 12,
+          "state": "leave",
+          "time": 630.05
+        },
+        {
+          "id": 13,
+          "state": "leave",
+          "time": 630.05
+        },
+        {
+          "id": 7,
+          "state": "fly",
+          "time": 632.149999999998
+        },
+        {
+          "id": 8,
+          "state": "fly",
+          "time": 632.149999999998
+        },
+        {
+          "id": 9,
+          "state": "fly",
+          "time": 632.149999999998
+        },
+        {
+          "id": 10,
+          "state": "fly",
+          "time": 632.149999999998
+        },
+        {
+          "id": 11,
+          "state": "fly",
+          "time": 632.149999999998
+        },
+        {
+          "id": 12,
+          "state": "fly",
+          "time": 632.149999999998
+        },
+        {
+          "id": 13,
+          "state": "fly",
+          "time": 632.149999999998
+        },
+        {
+          "id": 7,
+          "state": "hop",
+          "time": 632.9499999999973
+        },
+        {
+          "id": 9,
+          "state": "hop",
+          "time": 632.9499999999973
+        },
+        {
+          "id": 11,
+          "state": "hop",
+          "time": 632.9499999999973
+        },
+        {
+          "id": 8,
+          "state": "hop",
+          "time": 632.9999999999973
+        },
+        {
+          "id": 13,
+          "state": "hop",
+          "time": 633.0499999999972
+        },
+        {
+          "id": 12,
+          "state": "hop",
+          "time": 633.0999999999972
+        },
+        {
+          "id": 10,
+          "state": "hop",
+          "time": 633.299999999997
+        },
+        {
+          "id": 7,
+          "state": "preen",
+          "time": 635.2999999999952
+        },
+        {
+          "id": 10,
+          "state": "fly",
+          "time": 635.499999999995
+        },
+        {
+          "id": 13,
+          "state": "hop",
+          "time": 636.2999999999943
+        },
+        {
+          "id": 12,
+          "state": "fly",
+          "time": 636.549999999994
+        },
+        {
+          "id": 11,
+          "state": "preen",
+          "time": 636.6999999999939
+        },
+        {
+          "id": 8,
+          "state": "hop",
+          "time": 637.3999999999933
+        },
+        {
+          "id": 9,
+          "state": "hop",
+          "time": 637.4499999999932
+        },
+        {
+          "id": 10,
+          "state": "hop",
+          "time": 638.849999999992
+        },
+        {
+          "id": 11,
+          "state": "arrange",
+          "time": 640.0999999999908
+        },
+        {
+          "id": 12,
+          "state": "hop",
+          "time": 640.3999999999905
+        },
+        {
+          "id": 7,
+          "state": "arrange",
+          "time": 640.94999999999
+        },
+        {
+          "id": 13,
+          "state": "fly",
+          "time": 641.8499999999892
+        },
+        {
+          "id": 8,
+          "state": "fly",
+          "time": 642.5999999999887
+        },
+        {
+          "id": 10,
+          "state": "hop",
+          "time": 642.7999999999887
+        },
+        {
+          "id": 9,
+          "state": "fly",
+          "time": 642.8999999999887
+        },
+        {
+          "id": 12,
+          "state": "hop",
+          "time": 644.4999999999891
+        },
+        {
+          "id": 9,
+          "state": "hop",
+          "time": 645.1999999999892
+        },
+        {
+          "id": 13,
+          "state": "hop",
+          "time": 645.4999999999893
+        }
+      ]
+    },
+    "playerPreserved": true,
+    "deerAlert": true,
+    "squirrel": "forage",
+    "animalBefore": "{\"position\":[9.811665560971582,-0.19129553319044817,16.00100783529845],\"state\":\"graze\"}"
+  },
+  "returned": {
+    "active": false,
+    "position": [
+      10.811665560971582,
+      1.751225187700137,
+      17.00100783529845
+    ],
+    "yaw": 0,
+    "gl": 0
+  },
+  "mobile": {
+    "active": true,
+    "width": 390,
+    "hud": {
+      "x": 20,
+      "y": 516.8125,
+      "width": 310,
+      "height": 220.1875,
+      "top": 516.8125,
+      "right": 330,
+      "bottom": 737,
+      "left": 20
+    }
+  },
+  "passed": true
+}
