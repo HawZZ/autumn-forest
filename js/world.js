@@ -8,15 +8,28 @@
   function baseHeight(x,z){
     return fbm(x*.021,z*.021,4)*3.7+noise(x*.075+9,z*.075)*.42+smooth(32,110,Math.hypot(x,z))*7;
   }
-  const creekLevel=z=>-.7+Math.sin(z*.024)*.45;
+  const creekLevel=z=>-.7-z*.023;
+  function creekSlope(z){return -.023;}
+  function creekWidth(z){return 1.42+.35*Math.sin(z*.063+.7)+.24*Math.cos(z*.12);}
+  function waterDepth(x,z){return creekLevel(z)-height(x,z);}
+  function creekBed(x,z){
+    const dx=(x-creekX(z))/creekWidth(z);
+    return noise(x*1.3,z*.70)*.11+noise(x*2.8+14,z*1.9)*.055+Math.sin(z*.72+dx*1.3)*.055;
+  }
+  function flowAt(x,z){
+    const slope=-creekSlope(z),width=creekWidth(z),depth=Math.max(.04,waterDepth(x,z));
+    const bed=creekBed(x,z),pool=.75+.25*Math.sin(z*.17+.8),speed=clamp((.65+slope*5.5+(.38-depth)*.80-bed*1.6)*pool,.20,2.2);
+    const dx=creekX(z+.2)-creekX(z-.2),length=Math.hypot(dx,.4),cross=(noise(x*.6,z*.45)-noise(x*.6+4,z*.45))*.60;
+    return[dx/length*speed+cross,.4/length*speed+bed*.15,depth,width,bed];
+  }
   function pathDistance(x,z){return Math.abs(x-pathX(z))/Math.sqrt(1+Math.pow(.143*Math.cos(z*.042)+.1335*Math.cos(z*.089+1.1),2));}
   function creekDistance(x,z){return Math.abs(x-creekX(z))/Math.sqrt(1+Math.pow(.227*Math.cos(z*.036+.65)+.165*Math.cos(z*.11),2));}
   function height(x,z){
     let h=baseHeight(x,z);
     const pd=pathDistance(x,z), pm=1-smooth(.9,2.7,pd);
     if(pm>0)h=F.math.lerp(h,baseHeight(pathX(z),z),pm*.65);
-    const cd=creekDistance(x,z),cm=1-smooth(1.5,4.4,cd);
-    if(cm>0)h=F.math.lerp(h,creekLevel(z)-.38,cm);
+    const cd=creekDistance(x,z),cm=1-smooth(creekWidth(z)*.85,creekWidth(z)+2.9,cd);
+    if(cm>0)h=F.math.lerp(h,creekLevel(z)-.12-.43*(1-smooth(0,creekWidth(z),cd))+creekBed(x,z)*.55,cm);
     return h;
   }
   function normal(x,z){const e=.18;return V.normalize([height(x-e,z)-height(x+e,z),e*2,height(x,z-e)-height(x,z+e)]);}
@@ -31,7 +44,7 @@
     return moist>.1?[.70,.42,.085]:COLORS.oak;
   }
   function makeInstance(x,z,scale,type,r,color,angle){
-    return {position:[x,height(x,z)-.06,z],scale:Array.isArray(scale)?scale:[scale,scale,scale],rotation:angle===undefined?r()*Math.PI*2:angle,phase:r()*40,color:color||[1,1,1]};
+    return {position:[x,height(x,z)-.06,z],scale:Array.isArray(scale)?scale:[scale,scale,scale],rotation:angle===undefined?r()*Math.PI*2:angle,phase:r()*40,color:color||[1,1,1],variant:Math.floor(r()*4)};
   }
   F.createWorld=function(onProgress){
     const random=rng(219071),trees=[[],[],[]],colliders=[],grid=new Map(),saplings=[];
@@ -65,7 +78,7 @@
       trees[type].push(makeInstance(x,z,scale,type,random,treeColor(type,random(),noise(x*.03,z*.03))));
     }
     function addTreeCollider(instance,type){
-      const profile=F.geometry.createTree(type,3041+type*971,0).trunkProfile;
+      const profile=F.geometry.createTree(type,3041+type*971,0,instance.variant).trunkProfile;
       const co=Math.cos(instance.rotation),si=Math.sin(instance.rotation),ground=instance.position[1];
       for(let i=0;i<profile.length-1;i++){
         const a=profile[i],b=profile[i+1];
@@ -86,10 +99,11 @@
     // A distant ring of layered hills is geometry, not a photographic backdrop.
     const mountains=[];
     for(const list of trees)for(let i=0;i<list.length;i++)addTreeCollider(list[i],trees.indexOf(list));
-    const ferns=[],grasses=[],rocks=[],groundLeaves=[],logs=[];
-    for(let i=0;i<10500;i++){
+    const ferns=[],grasses=[],rocks=[],groundLeaves=[],logs=[],waterObstacles=[];
+    for(let i=0;i<6500;i++){
       const x=(random()-.5)*150,z=(random()-.5)*160-14;
       if(Math.hypot(x,z)>92||creekDistance(x,z)<1.65||pathDistance(x,z)<1.0)continue;
+      const cluster=noise(x*.055+7,z*.055-4);if(cluster<-.16)continue;
       const scale=.48+random()*.82;
       ferns.push(makeInstance(x,z,scale,0,random,[.24+random()*.10,.31+random()*.11,.085+random()*.055]));
     }
@@ -101,6 +115,7 @@
     for(let i=0;i<290;i++){
       const z=(random()-.5)*165,x=creekX(z)+(random()<.5?-1:1)*(1.6+random()*3.7);
       const s=.16+random()*.65;
+      const stone={x,z,radius:s*.85,height:s*1.2};waterObstacles.push(stone);
       rocks.push(makeInstance(x,z,[s*(1+random()*.8),s*.65,s],0,random,[.45+random()*.2,.45+random()*.18,.38+random()*.14]));
       if(s>.38)addCollider(x,z,s*.85,s*1.2,1);
     }
@@ -133,6 +148,6 @@
       creek:{name:'溪畔听风',description:'一溪秋水，半树金声',x:creekX(12)-3.5,z:12,yaw:-1.27,pitch:-.10},
       overlook:{name:'远山层林',description:'万叶着色，远山含烟',x:pathX(-62),z:-62,yaw:Math.PI+.08,pitch:.045}
     };
-    return {RADIUS,pathX,creekX,pathDistance,creekDistance,creekLevel,height,normal,slope,trees,ferns,grasses,rocks,groundLeaves,logs,saplings,colliders,nearby,viewpoints,mountains};
+    return {RADIUS,pathX,creekX,pathDistance,creekDistance,creekLevel,creekSlope,creekWidth,waterDepth,flowAt,height,normal,slope,trees,ferns,grasses,rocks,groundLeaves,logs,saplings,colliders,nearby,viewpoints,mountains,waterObstacles};
   };
 })(window.Forest);

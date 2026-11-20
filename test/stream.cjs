@@ -1,0 +1,7 @@
+const {chromium}=require('playwright-core');
+(async()=>{const browser=await chromium.launch({headless:true,executablePath:'/Users/user/Library/Caches/ms-playwright/chromium-1234/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing',args:['--no-sandbox','--use-angle=metal','--ignore-gpu-blocklist']});try{
+const page=await browser.newPage({viewport:{width:1440,height:900}});page.setDefaultTimeout(120000);const errors=[];page.on('console',m=>{if(m.type()==='error'||m.type()==='warning')errors.push(m.text());});page.on('pageerror',e=>errors.push(e.message));
+await page.goto('http://127.0.0.1:4174');await page.waitForFunction(()=>window.__forest,{timeout:120000});await page.evaluate(()=>{__forest.goToView('creek');__forest.player.pitch=-.18;document.getElementById('enter-button').click();});await page.waitForTimeout(1300);
+for(let i=0;i<3;i++){await page.screenshot({path:`/Users/user/Documents/personal/autumn-forest/test/stream-${i}.png`,timeout:120000});await page.waitForTimeout(900);}
+console.log(JSON.stringify({errors,stats:await page.evaluate(()=>({fps:__forest.renderer.lastFPS,gl:__forest.renderer.gl.getError(),triangles:__forest.renderer.triangles,depth:__forest.world.waterDepth(__forest.world.creekX(12),12),flow:__forest.world.flowAt(__forest.world.creekX(12),12)}))},null,2));
+}finally{await browser.close();}})().catch(e=>{console.error(e);process.exit(1)});
